@@ -11,15 +11,21 @@ import {
   YAxis,
 } from "recharts";
 
+// Kept for the table's small platform-identity swatches (a neutral dot next
+// to each name), NOT used for chart bars -- the chart itself stays
+// monochromatic gray with a single gold highlight on the top performer, per
+// the "one reserved accent" rule.
 export const PLATFORM_COLORS: Record<string, string> = {
-  Instagram: "#e1306c",
-  TikTok: "#111827",
-  YouTube: "#ef4444",
-  Bilibili: "#00a1d6",
-  RedNote: "#ff2442",
+  Instagram: "#b08a4a",
+  TikTok: "#8b8b92",
+  YouTube: "#8b8b92",
+  Bilibili: "#8b8b92",
+  RedNote: "#8b8b92",
 };
 
-const FALLBACK_COLOR = "#4f46e5";
+const FALLBACK_COLOR = "#8b8b92";
+const BASE_COLOR = "#6b6c76";
+const HIGHLIGHT_COLOR = "#cda45e";
 
 export function platformColor(platform: string): string {
   return PLATFORM_COLORS[platform] ?? FALLBACK_COLOR;
@@ -40,19 +46,21 @@ export default function PlatformChart({ rows }: { rows: PlatformChartRow[] }) {
     return <div className="empty-state">No data for the current filters.</div>;
   }
 
+  const maxRate = Math.max(...data.map((d) => d.ratePct));
+
   return (
     <div className="chart-wrap">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f4" />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />
           <XAxis
             dataKey="platform"
-            tick={{ fontSize: 12, fill: "#6b7280" }}
-            axisLine={{ stroke: "#e5e7eb" }}
+            tick={{ fontSize: 12, fill: "#9d9da3" }}
+            axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
             tickLine={false}
           />
           <YAxis
-            tick={{ fontSize: 11, fill: "#9ca3af" }}
+            tick={{ fontSize: 11, fill: "#6c6c72" }}
             axisLine={false}
             tickLine={false}
             width={40}
@@ -62,13 +70,19 @@ export default function PlatformChart({ rows }: { rows: PlatformChartRow[] }) {
             formatter={(value: number) => [`${value.toFixed(2)}%`, "Weighted ER"]}
             contentStyle={{
               borderRadius: 8,
-              border: "1px solid #e5e7eb",
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "#16161a",
+              color: "#f2f1ec",
               fontSize: 12,
             }}
+            labelStyle={{ color: "#f2f1ec" }}
           />
-          <Bar dataKey="ratePct" radius={[6, 6, 0, 0]} maxBarSize={48}>
+          <Bar dataKey="ratePct" radius={[4, 4, 0, 0]} maxBarSize={48}>
             {data.map((d) => (
-              <Cell key={d.platform} fill={platformColor(d.platform)} />
+              <Cell
+                key={d.platform}
+                fill={d.ratePct === maxRate && maxRate > 0 ? HIGHLIGHT_COLOR : BASE_COLOR}
+              />
             ))}
           </Bar>
         </BarChart>

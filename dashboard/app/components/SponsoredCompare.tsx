@@ -26,6 +26,9 @@ interface CompareSide {
   weightedEngagementRate: number | null;
 }
 
+const BASE_COLOR = "#6b6c76";
+const HIGHLIGHT_COLOR = "#cda45e";
+
 export default function SponsoredCompare({
   organic,
   sponsored,
@@ -46,10 +49,18 @@ export default function SponsoredCompare({
     lift = (sponsoredRate - organicRate) / organicRate;
   }
 
+  // Gold highlights only the standout side (the one with the higher rate),
+  // per the "one reserved accent" rule -- not a fixed organic/sponsored
+  // color pairing.
+  const organicIsWinner =
+    organicRate !== null && sponsoredRate !== null && organicRate >= sponsoredRate;
+  const sponsoredIsWinner =
+    organicRate !== null && sponsoredRate !== null && sponsoredRate > organicRate;
+
   return (
     <div className="compare-grid">
       <div className="compare-cards">
-        <div className="compare-card organic">
+        <div className={`compare-card ${organicIsWinner ? "winner" : ""}`}>
           <span className="tag">
             <span className="dot" />
             Organic
@@ -57,7 +68,7 @@ export default function SponsoredCompare({
           <div className="rate">{fmtPct(organicRate)}</div>
           <div className="meta">{fmtInt(organic.n)} posts</div>
         </div>
-        <div className="compare-card sponsored">
+        <div className={`compare-card ${sponsoredIsWinner ? "winner" : ""}`}>
           <span className="tag">
             <span className="dot" />
             Sponsored
@@ -85,10 +96,10 @@ export default function SponsoredCompare({
             layout="vertical"
             margin={{ top: 0, right: 24, left: 0, bottom: 0 }}
           >
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eef0f4" />
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.06)" />
             <XAxis
               type="number"
-              tick={{ fontSize: 11, fill: "#9ca3af" }}
+              tick={{ fontSize: 11, fill: "#6c6c72" }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => `${v.toFixed(1)}%`}
@@ -96,18 +107,25 @@ export default function SponsoredCompare({
             <YAxis
               type="category"
               dataKey="name"
-              tick={{ fontSize: 12, fill: "#6b7280" }}
+              tick={{ fontSize: 12, fill: "#9d9da3" }}
               axisLine={false}
               tickLine={false}
               width={80}
             />
             <Tooltip
               formatter={(value: number) => [`${value.toFixed(2)}%`, "Weighted ER"]}
-              contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
+              contentStyle={{
+                borderRadius: 8,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "#16161a",
+                color: "#f2f1ec",
+                fontSize: 12,
+              }}
+              labelStyle={{ color: "#f2f1ec" }}
             />
-            <Bar dataKey="ratePct" radius={[0, 6, 6, 0]} maxBarSize={36}>
-              <Cell fill="#0ea5a3" />
-              <Cell fill="#f59e0b" />
+            <Bar dataKey="ratePct" radius={[0, 4, 4, 0]} maxBarSize={36}>
+              <Cell fill={organicIsWinner ? HIGHLIGHT_COLOR : BASE_COLOR} />
+              <Cell fill={sponsoredIsWinner ? HIGHLIGHT_COLOR : BASE_COLOR} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
