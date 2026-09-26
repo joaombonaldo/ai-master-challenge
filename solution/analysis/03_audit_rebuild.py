@@ -407,7 +407,8 @@ def main():
         segment={"platform": None, "content_type": None, "category": None, "creator_tier": None, "sponsored": None},
         metric="engagement_rate", value=round(float(best_pct), 2), baseline=0.0, lift=round(float(top_combo["lift"]), 4),
         n=int(len(df)), method="exhaustive combo search",
-        effect_size="max deviation across combos = 1.3%", confidence="high",
+        effect_size=f"best {best_pct:+.1f}%, worst {worst_pct:+.1f}% -- max deviation across combos",
+        confidence="high",
         chart="charts/05_narrow_combo_search.png",
     ))
 

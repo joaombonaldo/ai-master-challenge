@@ -456,18 +456,14 @@ def main():
     findings.append({
         "id": new_id(), "question": "Q4",
         "claim": f"The worst-performing 10% of posts ({len(bottom_decile):,} posts) include slightly more posts "
-                 f"{segment_phrase(top_over[0], top_over[1])} than the rest of the dataset (about {pp_rounded} "
-                 f"percentage point{'s' if pp_rounded != 1 else ''} more) -- a weak pattern worth watching, not a "
-                 "proven cause.",
+                 f"{segment_phrase(top_over[0], top_over[1])} than the rest (about {pp_rounded} "
+                 f"point{'s' if pp_rounded != 1 else ''} more) -- a weak pattern, not a proven cause.",
         "segment": {"platform": None, "content_type": None, "category": None, "creator_tier": None, "sponsored": None},
         "metric": "engagement_rate", "value": float(thresh), "baseline": float(df["er_views"].median()),
         "lift": round(float(thresh / df["er_views"].median()), 3) if df["er_views"].median() else None,
         "n": int(len(bottom_decile)), "method": "comparison of worst 10% vs rest of dataset",
         "effect_size": f"+{pp_rounded}pp overrepresentation",
-        "technical_detail": f"decile comparison of category shares; +{pp_value:.1f}pp vs rest of dataset",
-        "usage_guidance": "Treat as a hypothesis to test, not a rule to act on. Do not cut sponsorship budget for "
-                           "small creators or change size targeting based on this alone -- validate with a "
-                           "controlled test before changing spend or strategy.",
+        "usage_guidance": "Treat as a hypothesis to test, not a rule to act on -- validate before changing spend.",
         "confidence": "medium", "chart": None,
     })
 
@@ -519,19 +515,16 @@ def main():
         median_pct = (overall_median_lift - 1) * 100
         findings.append({
             "id": new_id(), "question": "Q2",
-            "claim": f"Comparing sponsored to organic posts across {len(strata_df)} matched groups (same platform, "
-                     f"creator size, and category), sponsored posts perform essentially the same as organic -- the "
-                     f"difference ranges from {abs(min_pct):.1f}% lower to {max_pct:.1f}% higher, typically "
-                     f"{median_pct:.0f}%. This holds after matching, so it is not an artifact of comparing unlike "
-                     "groups: sponsorship shows no meaningful engagement lift or penalty in this dataset.",
+            "claim": f"Across {len(strata_df)} matched groups (platform, creator size, category), sponsored posts "
+                     f"perform essentially the same as organic: {abs(min_pct):.1f}% lower to {max_pct:.1f}% higher, "
+                     f"typically {median_pct:.0f}%. No meaningful sponsorship lift or penalty after matching.",
             "segment": {"platform": None, "content_type": None, "category": None, "creator_tier": None, "sponsored": True},
             "metric": "engagement_rate", "value": round(float(overall_median_lift), 3), "baseline": 1.0,
             "lift": round(float(overall_median_lift), 3), "n": int(strata_df[["n_sponsored", "n_organic"]].sum().sum()),
             "method": "statistical test across matched groups, median of group differences",
             "effect_size": f"range across {len(strata_df)} groups: ~{lift_span_pp:.1f}pp end to end",
-            "technical_detail": f"Mann-Whitney U per stratum; lift span "
-                                 f"{strata_df['lift'].min():.3f}x-{strata_df['lift'].max():.3f}x; "
-                                 f"{share_significant*100:.0f}% of strata p<0.05",
+            "technical_detail": f"Mann-Whitney U/stratum; lift {strata_df['lift'].min():.3f}x-"
+                                 f"{strata_df['lift'].max():.3f}x; {share_significant*100:.0f}% p<0.05",
             "confidence": "high", "chart": "charts/04_sponsorship_lift.png",
         })
 

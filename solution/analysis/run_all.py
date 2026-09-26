@@ -15,6 +15,11 @@ SCRIPTS = [
     # that approved wording -- if 02 is ever edited to bake in the approved language
     # directly, this comment (and the two-step run order) can be removed.
     "solution/analysis/03_audit_rebuild.py",
+    # 04_brief_benchmark_test.py directly tests the literal example used in the
+    # challenge brief (30-60s Tech videos, 10K-50K-follower creators, shares vs.
+    # platform average) and appends the honest result as new findings (does not
+    # touch or renumber F01-F20).
+    "solution/analysis/04_brief_benchmark_test.py",
 ]
 
 
