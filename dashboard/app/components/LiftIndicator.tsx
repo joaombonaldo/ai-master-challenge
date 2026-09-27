@@ -6,6 +6,7 @@ import DataConfidenceDot, {
   INSUFFICIENT_DATA_MESSAGE,
 } from "./DataConfidenceDot";
 import HelpTip from "./HelpTip";
+import HeroCell from "./HeroCell";
 
 function fmtLift(lift: number | null): string {
   if (lift === null) return "-";
@@ -28,33 +29,27 @@ const LIFT_HELP_TEXT =
  */
 export default function LiftIndicator({ result }: { result: LiftResult }) {
   const tier = dataTier(result.n);
+  const label = (
+    <>
+      Lift vs. baseline
+      <HelpTip text={LIFT_HELP_TEXT} />
+    </>
+  );
 
   if (tier === "insufficient") {
-    return (
-      <div className="hero-cell">
-        <div className="label">
-          Lift vs. baseline
-          <HelpTip text={LIFT_HELP_TEXT} />
-        </div>
-        <div className="value muted-message">{INSUFFICIENT_DATA_MESSAGE}</div>
-      </div>
-    );
+    return <HeroCell label={label} value={INSUFFICIENT_DATA_MESSAGE} muted />;
   }
 
   return (
-    <div className="hero-cell">
-      <div className="label">
-        Lift vs. baseline
-        <HelpTip text={LIFT_HELP_TEXT} />
-      </div>
-      <div className="value">
-        {fmtLift(result.lift)}
-        <DataConfidenceDot n={result.n} />
-      </div>
-      <div className="sub">
-        weighted ER vs. {result.baselineLabel} ({result.baselineN.toLocaleString()}{" "}
-        posts)
-      </div>
-    </div>
+    <HeroCell
+      label={label}
+      value={
+        <>
+          {fmtLift(result.lift)}
+          <DataConfidenceDot n={result.n} />
+        </>
+      }
+      sub={`weighted ER vs. ${result.baselineLabel} (${result.baselineN.toLocaleString()} posts)`}
+    />
   );
 }

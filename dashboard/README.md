@@ -164,6 +164,20 @@ runtime dependency beyond serving static files.
 
 ## Known gaps / deviations (for the leader)
 
+- UI layer migrated to Material UI (MUI v7: `@mui/material`, `@emotion/*`,
+  `@mui/material-nextjs`'s `v15-appRouter` cache provider, `@mui/icons-material`
+  for the theme-toggle icons only). No data logic, aggregation, recommendation
+  rules or the `/api/summary` route changed. Visual identity (gold accent,
+  Fraunces/Inter pairing, light-default/dark-toggle) is preserved through a
+  custom MUI theme (`app/theme.ts`) using MUI's CSS-variables theming mode
+  (`cssVariables` + `colorSchemes`), so there's no re-render flash on toggle
+  and no flash-of-wrong-theme on load (`InitColorSchemeScript` in
+  `layout.tsx` replaces the old hand-written blocking script).
+  `app/globals.css` now only holds the two font custom properties; everything
+  else is MUI components + `sx`. Charts (recharts) keep their own light/dark
+  color constants since SVG attributes can't consume MUI's CSS-var tokens
+  directly. Known minor difference: the platform/sponsored chart tooltips now
+  follow the active theme (previously always dark-styled, even in light mode).
 - `npm audit`: fixed, 0 vulnerabilities. The original 2 findings (1 high, 1
   critical) turned out to be two separate issues, not one: the critical one
   was in Next.js itself (a bundle of RSC/Server Actions/Image-Optimizer DoS

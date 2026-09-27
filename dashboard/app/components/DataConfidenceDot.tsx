@@ -1,5 +1,7 @@
 "use client";
 
+import Tooltip from "@mui/material/Tooltip";
+import Box from "@mui/material/Box";
 import { dataTier } from "@/lib/aggregate-utils";
 
 // Plain-language message shown INSTEAD OF a number when there isn't enough
@@ -21,8 +23,17 @@ const THIN_DATA_TOOLTIP =
 export default function DataConfidenceDot({ n }: { n: number }) {
   if (dataTier(n) !== "thin") return null;
   return (
-    <span className="confidence-dot" title={THIN_DATA_TOOLTIP} aria-label={THIN_DATA_TOOLTIP}>
-      <span className="confidence-dot-mark" />
-    </span>
+    <Tooltip title={THIN_DATA_TOOLTIP} enterTouchDelay={0}>
+      <Box
+        component="span"
+        aria-label={THIN_DATA_TOOLTIP}
+        sx={{ display: "inline-flex", alignItems: "center", verticalAlign: "middle", ml: 1, cursor: "help" }}
+      >
+        <Box
+          component="span"
+          sx={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", bgcolor: "primary.main" }}
+        />
+      </Box>
+    </Tooltip>
   );
 }

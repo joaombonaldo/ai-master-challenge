@@ -10,6 +10,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
 import { dataTier } from "@/lib/aggregate-utils";
 import DataConfidenceDot, {
   INSUFFICIENT_DATA_MESSAGE,
@@ -30,8 +32,18 @@ interface CompareSide {
   weightedEngagementRate: number | null;
 }
 
-const BASE_COLOR = "#6b6c76";
-const HIGHLIGHT_COLOR = "#cda45e";
+// Literal light-mode chart palette (Recharts renders raw SVG attributes,
+// which can't consume MUI's theme tokens directly). Same values as
+// theme.ts's light scheme -- app is light-only, no dark-mode branching.
+const PALETTE = {
+  base: "#6b6c76",
+  highlight: "#8a6522",
+  grid: "rgba(17,17,20,0.08)",
+  tick: "#5c5c64",
+  tooltipBg: "#ffffff",
+  tooltipText: "#17171a",
+  tooltipBorder: "rgba(17,17,20,0.16)",
+};
 
 export default function SponsoredCompare({
   organic,
@@ -46,6 +58,8 @@ export default function SponsoredCompare({
   groupCount: number;
   minGroupN: number;
 }) {
+  const c = PALETTE;
+
   const organicRate = organic.weightedEngagementRate;
   const sponsoredRate = sponsored.weightedEngagementRate;
 
@@ -72,50 +86,94 @@ export default function SponsoredCompare({
   const sponsoredTier = dataTier(sponsored.n);
   const liftTier = medianGroupLift !== null ? dataTier(minGroupN) : "insufficient";
 
+  function Card({
+    tag,
+    tier,
+    rate,
+    n,
+    winner,
+  }: {
+    tag: string;
+    tier: string;
+    rate: number | null;
+    n: number;
+    winner: boolean;
+  }) {
+    return (
+      <Box
+        sx={{
+          borderRadius: "10px",
+          p: "14px 16px",
+          border: 1,
+          borderColor: winner ? "custom.goldBorder" : "divider",
+          bgcolor: winner ? "custom.goldSoft" : "transparent",
+        }}
+      >
+        <Typography
+          component="span"
+          sx={{
+            fontSize: "0.76rem",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.03em",
+            color: winner ? "custom.goldStrong" : "text.secondary",
+            display: "inline-flex",
+            alignItems: "center",
+          }}
+        >
+          <Box
+            component="span"
+            sx={{
+              display: "inline-block",
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              mr: "8px",
+              bgcolor: winner ? "primary.main" : "custom.seriesB",
+            }}
+          />
+          {tag}
+        </Typography>
+        {tier === "insufficient" ? (
+          <Typography sx={{ fontSize: "0.78rem", fontWeight: 500, color: "text.secondary", mt: "8px" }}>
+            {INSUFFICIENT_DATA_MESSAGE}
+          </Typography>
+        ) : (
+          <>
+            <Typography
+              sx={{ fontFamily: "var(--font-serif)", fontSize: "1.5rem", fontWeight: 600, mt: "8px", color: "text.primary" }}
+            >
+              {fmtPct(rate)}
+              <DataConfidenceDot n={n} />
+            </Typography>
+            <Typography sx={{ fontSize: "0.76rem", color: "text.disabled", mt: "2px" }}>
+              {fmtInt(n)} posts
+            </Typography>
+          </>
+        )}
+      </Box>
+    );
+  }
+
   return (
-    <div className="compare-grid">
-      <div className="compare-cards">
-        <div className={`compare-card ${organicIsWinner ? "winner" : ""}`}>
-          <span className="tag">
-            <span className="dot" />
-            Organic
-          </span>
-          {organicTier === "insufficient" ? (
-            <div className="rate muted-message small">{INSUFFICIENT_DATA_MESSAGE}</div>
-          ) : (
-            <>
-              <div className="rate">
-                {fmtPct(organicRate)}
-                <DataConfidenceDot n={organic.n} />
-              </div>
-              <div className="meta">{fmtInt(organic.n)} posts</div>
-            </>
-          )}
-        </div>
-        <div className={`compare-card ${sponsoredIsWinner ? "winner" : ""}`}>
-          <span className="tag">
-            <span className="dot" />
-            Sponsored
-          </span>
-          {sponsoredTier === "insufficient" ? (
-            <div className="rate muted-message small">{INSUFFICIENT_DATA_MESSAGE}</div>
-          ) : (
-            <>
-              <div className="rate">
-                {fmtPct(sponsoredRate)}
-                <DataConfidenceDot n={sponsored.n} />
-              </div>
-              <div className="meta">{fmtInt(sponsored.n)} posts</div>
-            </>
-          )}
-        </div>
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: { xs: "1fr", sm: "minmax(220px, 320px) 1fr" },
+        gap: "32px",
+        alignItems: "center",
+      }}
+    >
+      <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <Card tag="Organic" tier={organicTier} rate={organicRate} n={organic.n} winner={organicIsWinner} />
+        <Card tag="Sponsored" tier={sponsoredTier} rate={sponsoredRate} n={sponsored.n} winner={sponsoredIsWinner} />
         {lift !== null ? (
-          <p className="lift-note">
+          <Typography sx={{ fontSize: "0.8rem", color: "text.secondary", mt: "6px", lineHeight: 1.6 }}>
             Sponsored is{" "}
-            <strong>
+            <Box component="strong" sx={{ color: "custom.goldStrong", fontWeight: 600 }}>
               {lift >= 0 ? "+" : ""}
               {(lift * 100).toFixed(1)}%
-            </strong>{" "}
+            </Box>{" "}
             vs. organic
             {liftTier === "thin" && <DataConfidenceDot n={minGroupN} />}{" "}
             -- median across{" "}
@@ -123,22 +181,24 @@ export default function SponsoredCompare({
             x category x creator-tier groups, comparing only similar
             segments to each other. Not the raw pooled cards above, which
             can mix group composition between organic and sponsored.
-          </p>
+          </Typography>
         ) : (
-          <p className="lift-note">{INSUFFICIENT_DATA_MESSAGE}</p>
+          <Typography sx={{ fontSize: "0.8rem", color: "text.secondary", mt: "6px" }}>
+            {INSUFFICIENT_DATA_MESSAGE}
+          </Typography>
         )}
-      </div>
-      <div className="chart-wrap small">
+      </Box>
+      <Box sx={{ width: "100%", height: 170 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
             layout="vertical"
             margin={{ top: 0, right: 24, left: 0, bottom: 0 }}
           >
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.06)" />
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={c.grid} />
             <XAxis
               type="number"
-              tick={{ fontSize: 11, fill: "#6c6c72" }}
+              tick={{ fontSize: 11, fill: c.tick }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => `${v.toFixed(1)}%`}
@@ -146,7 +206,7 @@ export default function SponsoredCompare({
             <YAxis
               type="category"
               dataKey="name"
-              tick={{ fontSize: 12, fill: "#9d9da3" }}
+              tick={{ fontSize: 12, fill: c.tick }}
               axisLine={false}
               tickLine={false}
               width={80}
@@ -155,20 +215,20 @@ export default function SponsoredCompare({
               formatter={(value: number) => [`${value.toFixed(2)}%`, "Weighted ER"]}
               contentStyle={{
                 borderRadius: 8,
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "#16161a",
-                color: "#f2f1ec",
+                border: `1px solid ${c.tooltipBorder}`,
+                background: c.tooltipBg,
+                color: c.tooltipText,
                 fontSize: 12,
               }}
-              labelStyle={{ color: "#f2f1ec" }}
+              labelStyle={{ color: c.tooltipText }}
             />
             <Bar dataKey="ratePct" radius={[0, 4, 4, 0]} maxBarSize={36}>
-              <Cell fill={organicIsWinner ? HIGHLIGHT_COLOR : BASE_COLOR} />
-              <Cell fill={sponsoredIsWinner ? HIGHLIGHT_COLOR : BASE_COLOR} />
+              <Cell fill={organicIsWinner ? c.highlight : c.base} />
+              <Cell fill={sponsoredIsWinner ? c.highlight : c.base} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }
