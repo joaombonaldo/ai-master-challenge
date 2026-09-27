@@ -118,6 +118,7 @@ export default function PlatformChart({
             tickLine={false}
           />
           <YAxis
+            domain={[0, "auto"]}
             tick={{ fontSize: 11, fill: c.tickMuted }}
             axisLine={false}
             tickLine={false}

@@ -51,6 +51,13 @@ export default function SponsoredCompare({
 }: {
   organic: CompareSide;
   sponsored: CompareSide;
+  // The fair, group-matched statistic (median of per-group sponsored/organic
+  // ratios, computed by aggregateSponsoredCompareControlled) -- same number
+  // used by the hero "Patrocinado vs. orgânico (justo)" KPI and by the LLM
+  // recommendations. This drives the winner-highlight decision below so the
+  // highlight is consistent with the panel's "fair, matched" framing. The
+  // raw organic/sponsored rates passed in above are still used to DISPLAY
+  // the two pooled numbers -- only the highlight decision reads this prop.
   medianGroupLift: number | null;
   minGroupN: number;
 }) {
@@ -64,26 +71,27 @@ export default function SponsoredCompare({
     { name: "Patrocinado", ratePct: sponsoredRate ? sponsoredRate * 100 : 0 },
   ];
 
-  // Headline lift is the MEDIAN across matched platform x category x tier
-  // groups (a fair, apples-to-apples comparison), not the pooled rates
-  // shown in the cards below (which can mix group composition between the
-  // organic and sponsored sides).
-  const lift = medianGroupLift !== null ? medianGroupLift - 1 : null;
-  // A lift that rounds to 0.0% either way isn't an informative number --
-  // per leader feedback, don't show a "+0.0%" that reads as a real result.
-  const liftDisplay = lift !== null && Math.abs(lift * 100) >= 0.05 ? lift : null;
-
-  // Gold highlights only the standout side (the one with the higher rate),
-  // per the "one reserved accent" rule -- not a fixed organic/sponsored
-  // color pairing.
-  const organicIsWinner =
-    organicRate !== null && sponsoredRate !== null && organicRate >= sponsoredRate;
-  const sponsoredIsWinner =
-    organicRate !== null && sponsoredRate !== null && sponsoredRate > organicRate;
+  // Gold highlights only the standout side, driven by the FAIR, matched-group
+  // statistic (medianGroupLift), not by the pooled rate diff -- matching the
+  // panel's own "Comparação justa, pareada por plataforma x categoria x tier"
+  // claim. medianGroupLift is a ratio (1.03 = sponsored 3% above organic), so
+  // it's converted to a percentage-point-equivalent and checked against the
+  // same 3-point materiality floor used for the LLM recommendations (see
+  // MATERIALITY_FLOOR_PP in app/api/recommendations/route.ts).
+  const MATERIALITY_FLOOR_PP = 3;
+  const liftDiffPct =
+    medianGroupLift !== null ? Math.abs(medianGroupLift - 1) * 100 : 0;
+  // Same confidence-tier gating as the hero KPI for this exact statistic
+  // (dashboard-client.tsx, "Patrocinado vs. orgânico (justo)"): insufficient
+  // tier means no winner is ever shown, regardless of the raw pooled gap.
+  const groupTier = medianGroupLift === null ? "insufficient" : dataTier(minGroupN);
+  const hasMaterialDifference =
+    groupTier !== "insufficient" && liftDiffPct >= MATERIALITY_FLOOR_PP;
+  const organicIsWinner = hasMaterialDifference && medianGroupLift! < 1;
+  const sponsoredIsWinner = hasMaterialDifference && medianGroupLift! > 1;
 
   const organicTier = dataTier(organic.n);
   const sponsoredTier = dataTier(sponsored.n);
-  const liftTier = medianGroupLift !== null ? dataTier(minGroupN) : "insufficient";
 
   function Card({
     tag,
@@ -170,19 +178,6 @@ export default function SponsoredCompare({
       <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         <Card tag="Orgânico" tier={organicTier} rate={organicRate} n={organic.n} winner={organicIsWinner} />
         <Card tag="Patrocinado" tier={sponsoredTier} rate={sponsoredRate} n={sponsored.n} winner={sponsoredIsWinner} />
-        {liftDisplay !== null ? (
-          <Typography
-            sx={{ fontFamily: "var(--font-serif)", fontSize: "1.1rem", fontWeight: 600, color: "custom.goldStrong", mt: "6px" }}
-          >
-            {liftDisplay >= 0 ? "+" : ""}
-            {(liftDisplay * 100).toFixed(1)}%
-            {liftTier === "thin" && <DataConfidenceDot n={minGroupN} />}
-          </Typography>
-        ) : (
-          <Typography sx={{ fontSize: "1.1rem", fontWeight: 600, color: "text.disabled", mt: "6px" }}>
-            -
-          </Typography>
-        )}
       </Box>
       <Box sx={{ width: "100%", height: 170 }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -194,6 +189,7 @@ export default function SponsoredCompare({
             <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={c.grid} />
             <XAxis
               type="number"
+              domain={[0, "auto"]}
               tick={{ fontSize: 11, fill: c.tick }}
               axisLine={false}
               tickLine={false}

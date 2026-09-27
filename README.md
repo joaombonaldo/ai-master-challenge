@@ -80,35 +80,46 @@ Analisamos 52.214 posts de cinco plataformas (Instagram, TikTok, YouTube, Bilibi
 
 4. **Phase 3a–3e (Ferramenta extra):** developer construiu dashboard (Next.js + MUI). Spikes: ML testado e rejeitado (R²<0, AUC~0.5). Múltiplas iterações de UI/recomendações por LLM pedidas pelo líder: pooling injusto corrigido, colors, landing zone de filtros, context engineering das recomendações, cubo servidor-only para formato/duração/horário filtráveis, deploy Vercel (bug de fontes Google corrigido com fonte local). qa-tester passou smoke test (7/7 checks). Dashboard live em https://social-pulse-dashboard.vercel.app.
 
-### Onde a IA errou e como corrigi
+### Julgamento sobre decisões de IA
 
-**Erros da IA (registrados em process-log/DECISIONS.md):**
+**1. Sugestões minhas que a IA implementou**
 
-1. **IA rotulou dataset "LIKELY-SYNTHETIC", propôs framing de "demo"** → Líder corrigiu: dados são reais de negócio; entregáveis client-facing devem tratar como tal, nunca mencionar "Kaggle/sintético". Achado nulo é resultado legítimo, não desculpa.
+Minha visão arquitetural para a ferramenta traduziu-se em quatro direções concretas que a IA construiu:
 
-2. **IA usou jargão estatístico (p-value, decile, Mann-Whitney U)** em findings → Líder exigiu linguagem de marketing clara (percentuais, "efeito de X%", "confiança alta/média/baixa").
+1. **LLM-geradas recomendações** (não apenas rule-based) — pediu IA disparar chamadas Groq ao clique para gerar relatório executivo com recomendações priorizadas em PT-BR, com fallback automático a template se API indisponível.
 
-3. **Gráfico 02 com eixo y amplificado** (parecia mostrar diferença grande sendo <0,2%) → Detectado na revisão round 2; reconstruído com escala honesta.
+2. **Resumo executivo por IA** — botão separado que gera síntese dos dados filtrados pronta para executivos, usando o mesmo LLM com context engineering.
 
-4. **Pooling ingênuo patrocinado-vs-orgânico** no dashboard (violava GATE 0) → Corrigido para mediana de razões por grupo (controlada por plataforma × categoria × tier), igual à metodologia F11.
+3. **Iteração visual do dashboard** — direcionei três rodadas de design: descartei identidade "G4-dourada" em favor de Material UI (mais profissional, familiar); removi dark mode (confundindo no protótipo); reorganizei de abas para 3 seções sempre visíveis.
 
-5. **LLM recomendações classificou 0,02pp como "alta confiança"** → Piso de materialidade adicionado (diferenças <3pp forçadas a "baixa confiança").
+4. **Honestidade em gráficos** — detectei que cores diferentes nos eixos X sugeria diferença real onde a diferença era <0,2% (Gráfico 02 original) ou onde múltiplas linhas de plataforma mascaravam comportamento plano. Pediu IA refazer com escala honesta (não amplificada).
 
-6. **Modelo tentou subtrair percentuais** (reportou 0,032pp como 3,2pp) → Corrigido pré-calculando todas as contas em código, proibindo modelo de refazer.
+5. **Análise competitiva pré-submissão** — Antes de abrir o PR, propus uma análise dos outros PRs de submissão do Challenge 004 no repositório Gestao-Quatro-Ponto-Zero (incluindo feedback real de revisores) para comparar esta entrega e identificar melhorias. IA pesquisou e consolidou achados: um revisor explícito marcou que 30% da nota vem de evidência clara de julgamento (o que foi do candidato, onde ele corrigiu a IA, o que descartou e por quê). Essa análise levou à reescrita desta própria seção "Como usei IA" para separar com clareza sugestões minhas vs. erros da IA corrigidos.
 
-### O que eu adicionei que a IA sozinha não faria
+**2. Ideias minhas que discuti com a IA e decidi não seguir**
 
-1. **Decisão de rigor antes de analisar:** Segmentar obrigatoriamente; nunca reportar taxa isolada; testar 6.760 combinações; estabelecer linha de 5% para "efeito real"; separar explicitamente "alta confiança" de "hipótese a testar".
+Dois spikes de viabilidade que propus e que, após análise da IA, decidi não construir:
 
-2. **Reframing de achado nulo:** Transformar "não encontramos driver" em recomendação de negócio (parar de pagar mais caro, testar nichos em paralelo, estruturar contrato por desempenho) — nada de "dados fracos, desculpa".
+1. **Regressão preditiva de engajamento** — Propus testar se seria viável um modelo de ML para prever engagement. data-scientist executou spike: Gradient Boosting predizendo engagement_rate resultou em R²=−0.00066 (pior que prever a média), classificação top-decil com AUC 0.481 (nível de chance). Essa análise confirmou o achado de sinal fraco nos dados — os dados não sustentam ilusão de capacidade preditiva. Decisão: o indicador de lift no dashboard seria aritmética direta (real vs. mediana do segmento), sem modelo.
 
-3. **Teste proativo do benchmark do brief:** Líder teve hipótese ("vídeo 30-60s tech, criadores 10K-50K, 3,2x") → pediu teste mesmo (resultado: 1,00x, n=20, não suporta). Isso validou o rigor da metodologia.
+2. **LangGraph para orquestração do pipeline** — Propus avaliar LangGraph para orquestrar as chamadas de dados/LLM/recomendações. IA forneceu análise técnica: LangGraph é projetado para grafos com ramificação condicional e ciclos; aqui temos pipeline linear (carregar dados → gerar resumo via LLM → gerar recomendações). Composição simples de funções acabou sendo mais fácil de implantar, testar e depurar.
 
-4. **Auditoria independente:** Pediu novo agente isolado confirmar F01, F11, F17. Resultado: confirmado.
+**3. Erros da IA que corrigi**
 
-5. **Dashboard acionável:** Não apenas gráficos; filtros self-service, indicador de lift, recomendações por IA — permitindo o Head de Marketing explorar dados sem depender de análise ad hoc.
+Erros documentados em [process-log/DECISIONS.md](./process-log/DECISIONS.md) e [process-log/PROCESS_LOG.md](./process-log/PROCESS_LOG.md), em ordem de fase:
 
-6. **Julgamento de confiança:** Decisão de incluir F10 como "monitorar, não agir" (sinal fraco <1,5pp) e F06/F07/F08/F09 como "teste 4–6 semanas antes de escalar" (ambas +0,9%, mas poucas replicações).
+- **Dataset "sintético"** (Phase 1) — IA rotulou como "LIKELY-SYNTHETIC" e propôs framing de "demo". Corrigido: dados são reais de negócio; client-facing deve tratar como tal.
+- **Jargão estatístico** (Phase 1) — p-value, decile, Mann-Whitney U em findings. Corrigido: linguagem de marketing clara (%, "efeito X%", "confiança alta/média/baixa").
+- **Eixo amplificado** (Phase 1) — Gráfico 02 exagerava diferença <0,2%. Reconstruído com escala honesta.
+- **Pooling injusto** (Phase 3) — Comparação patrocinado-vs-orgânico inicial fazia pooling naïve (violava GATE 0). Corrigido: mediana de razões por grupo (plataforma × categoria × tier).
+- **Artefatos internos expostos** (Phase 3) — Nomes tipo "findings.json" e tags "F01-F21" vazados na UI. Removido: app é autossuficiente.
+- **Cores inconsistentes** (Phase 3) — Gráficos usavam cores diferentes para sinais planos. Unificadas.
+- **Confiança falsa** (Phase 3) — LLM classificava 0,02pp como "alta confiança". Piso: <3pp = "baixa" sempre.
+- **Auto-fetch sem controle** (Phase 3) — Groq disparava a cada filtro, esvaziando rate limit silenciosamente. Mudado: trigger manual por clique.
+- **Payload incompleto** (Phase 3) — Recomendações LLM recebiam apenas 1 dimensão (plataforma OU categoria). Corrigido: enviar ranking pleno (plataforma/categoria/tier/formato/duração/horário).
+- **Aritmética errada** (Phase 3) — Modelo tentou subtrair percentuais (reportou 0.032pp como "3.2pp"). Pré-computado em código, modelo proibido de refazer contas.
+- **Dimensões não-filtráveis** (Phase 3) — Formato/duração/horário recomendados dataset-wide, ignorando filtro ativo. Criado cubo servidor-only respeitando contexto.
+- **Labels invisíveis** (Phase 3) — Barras do gráfico de plataforma sem rótulo visível (só hover). Adicionado rótulo on-bar.
 
 ---
 
