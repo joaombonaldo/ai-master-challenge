@@ -57,7 +57,8 @@ function buildPrompt(payload: ExecutiveSummaryPayload): string {
 
   return [
     "You are writing a short executive summary for a marketing manager who is not a data scientist.",
-    "Use plain, everyday language -- no statistics jargon (no 'p-value', 'confidence interval', 'regression', etc.).",
+    "Write the ENTIRE response in Brazilian Portuguese (PT-BR) -- every word, no English at all.",
+    "Use plain, everyday language -- no statistics jargon (no 'p-value', 'intervalo de confiança', 'regressão', etc.).",
     "Be honest: if the numbers show no meaningful effect, say so plainly instead of inventing a strong story.",
     "Write 100-150 words, 3-5 short sentences, no bullet points, no headers, no markdown.",
     "Do not mention data files, internal codes, or how the numbers were computed -- just state the findings and what to do about them.",

@@ -60,7 +60,7 @@ export function buildExecutiveSummaryPayload(
 }
 
 function pct(n: number | null, digits = 1): string {
-  if (n === null || Number.isNaN(n)) return "n/a";
+  if (n === null || Number.isNaN(n)) return "n/d";
   return `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%`;
 }
 
@@ -69,29 +69,31 @@ function pct(n: number | null, digits = 1): string {
  * string interpolation over the same payload sent to the LLM. Used
  * whenever no free-tier API key is configured, or whenever the live LLM
  * call fails for any reason -- the button must never show a broken state.
+ * Written in Portuguese (PT-BR) per leader request, same as the LLM
+ * output -- everything client-facing in this dashboard is PT-BR.
  */
 export function buildTemplatedSummary(payload: ExecutiveSummaryPayload): string {
   const lines: string[] = [];
 
   lines.push(
-    `Looking at ${payload.segment} (${payload.posts.toLocaleString()} posts), the weighted engagement rate is ${
-      payload.weightedEngagementRatePct !== null ? payload.weightedEngagementRatePct.toFixed(2) + "%" : "not available for this filter"
+    `Olhando para ${payload.segment} (${payload.posts.toLocaleString()} posts), a taxa de engajamento ponderada é ${
+      payload.weightedEngagementRatePct !== null ? payload.weightedEngagementRatePct.toFixed(2) + "%" : "indisponível para este filtro"
     }.`
   );
 
   if (payload.liftPct !== null) {
-    const cmp = Math.abs(payload.liftPct) < 1 ? "about in line with" : payload.liftPct > 0 ? "above" : "below";
-    lines.push(`That's ${cmp} the ${payload.liftBaselineLabel} (${pct(payload.liftPct)}).`);
+    const cmp = Math.abs(payload.liftPct) < 1 ? "em linha com" : payload.liftPct > 0 ? "acima" : "abaixo";
+    lines.push(`Isso está ${cmp} a ${payload.liftBaselineLabel} (${pct(payload.liftPct)}).`);
   }
 
   if (payload.sponsoredDataTier === "insufficient" || payload.sponsoredVsOrganicPct === null) {
-    lines.push("There isn't enough matched sponsored/organic data here to say whether sponsorship pays off in this segment.");
+    lines.push("Não há dados pareados de patrocinado/orgânico suficientes aqui para dizer se o patrocínio compensa neste segmento.");
   } else if (Math.abs(payload.sponsoredVsOrganicPct) < 3) {
-    lines.push("Sponsored and organic posts perform about the same here, so sponsorship isn't buying extra engagement on its own.");
+    lines.push("Posts patrocinados e orgânicos têm desempenho parecido aqui, então o patrocínio não está comprando engajamento extra por si só.");
   } else if (payload.sponsoredVsOrganicPct > 0) {
-    lines.push(`Sponsored posts outperform matched organic posts by ${pct(payload.sponsoredVsOrganicPct)} here.`);
+    lines.push(`Posts patrocinados superam os orgânicos pareados em ${pct(payload.sponsoredVsOrganicPct)} aqui.`);
   } else {
-    lines.push(`Sponsored posts underperform matched organic posts by ${pct(Math.abs(payload.sponsoredVsOrganicPct))} here -- organic does at least as well.`);
+    lines.push(`Posts patrocinados têm desempenho ${pct(Math.abs(payload.sponsoredVsOrganicPct)).replace("+", "")} pior que os orgânicos pareados aqui -- o orgânico performa pelo menos tão bem.`);
   }
 
   const actionable = payload.recommendations.find((r) => r.tone === "positive" || r.tone === "negative");

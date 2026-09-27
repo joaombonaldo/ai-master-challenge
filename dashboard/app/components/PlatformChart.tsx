@@ -4,7 +4,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -14,10 +13,15 @@ import Box from "@mui/material/Box";
 
 // Neutral swatch for the table's small platform-identity dots -- every
 // platform gets the same neutral gray so no bar/dot reads as arbitrarily
-// more "important" than another. The chart itself highlights only the
-// current standout (highest value) with the reserved gold accent, computed
-// per-render from the data, not hardcoded per platform.
-const NEUTRAL_SWATCH = "#8b8b92";
+// more "important" than another. Deliberate exception to the "gold on
+// standout" rule used elsewhere in the app: this breakdown-by-platform
+// chart and table use a single flat grey for every platform, no highlight
+// color at all, per leader feedback.
+// Matches PALETTE.base below exactly -- previously this was a separate
+// hardcoded hex (#8b8b92) that didn't match the chart bars' gray
+// (#6b6c76), so the small identity dot in the breakdown table looked like
+// a third, unexplained color next to the chart. Single source of truth now.
+const NEUTRAL_SWATCH = "#6b6c76";
 
 export function platformColor(_platform: string): string {
   return NEUTRAL_SWATCH;
@@ -26,9 +30,10 @@ export function platformColor(_platform: string): string {
 // Literal light-mode chart palette (Recharts renders raw SVG attributes,
 // which can't consume MUI's theme tokens directly). Same values as
 // theme.ts's light scheme -- app is light-only, no dark-mode branching.
+// No `highlight` entry here on purpose -- this chart never uses the gold
+// accent (see NEUTRAL_SWATCH note above).
 const PALETTE = {
   base: "#6b6c76",
-  highlight: "#8a6522",
   grid: "rgba(17,17,20,0.08)",
   axisLine: "rgba(17,17,20,0.16)",
   tickMuted: "#86868d",
@@ -54,12 +59,10 @@ export default function PlatformChart({ rows }: { rows: PlatformChartRow[] }) {
   if (data.length === 0) {
     return (
       <Box sx={{ py: "24px", textAlign: "center", color: "text.disabled", fontSize: "0.9rem" }}>
-        No data for the current filters.
+        Nenhum dado para os filtros atuais.
       </Box>
     );
   }
-
-  const maxRate = Math.max(...data.map((d) => d.ratePct));
 
   return (
     <Box sx={{ width: "100%", height: 220 }}>
@@ -80,7 +83,7 @@ export default function PlatformChart({ rows }: { rows: PlatformChartRow[] }) {
             tickFormatter={(v) => `${v.toFixed(1)}%`}
           />
           <Tooltip
-            formatter={(value: number) => [`${value.toFixed(2)}%`, "Weighted ER"]}
+            formatter={(value: number) => [`${value.toFixed(2)}%`, "TE ponderada"]}
             contentStyle={{
               borderRadius: 8,
               border: `1px solid ${c.tooltipBorder}`,
@@ -90,14 +93,7 @@ export default function PlatformChart({ rows }: { rows: PlatformChartRow[] }) {
             }}
             labelStyle={{ color: c.tooltipText }}
           />
-          <Bar dataKey="ratePct" radius={[4, 4, 0, 0]} maxBarSize={48}>
-            {data.map((d) => (
-              <Cell
-                key={d.platform}
-                fill={d.ratePct === maxRate && maxRate > 0 ? c.highlight : c.base}
-              />
-            ))}
-          </Bar>
+          <Bar dataKey="ratePct" radius={[4, 4, 0, 0]} maxBarSize={48} fill={c.base} />
         </BarChart>
       </ResponsiveContainer>
     </Box>

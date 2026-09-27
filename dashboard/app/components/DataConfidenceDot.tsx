@@ -8,10 +8,10 @@ import { dataTier } from "@/lib/aggregate-utils";
 // data to compute an honest comparison. Never show a real-looking number
 // (even "0.0%") in this case -- that would be misleading, not honest.
 export const INSUFFICIENT_DATA_MESSAGE =
-  "Not enough posts with this filter to show this comparison.";
+  "Não há posts suficientes com este filtro para mostrar esta comparação.";
 
 const THIN_DATA_TOOLTIP =
-  "Based on a small number of posts for this filter -- treat this as a directional signal, not a firm number.";
+  "Baseado em um número pequeno de posts para este filtro -- trate como um sinal direcional, não um número definitivo.";
 
 /**
  * Small inline dot + hover tooltip, shown next to a lift/comparison value

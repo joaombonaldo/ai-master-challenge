@@ -23,9 +23,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Social Media Engagement Dashboard",
+  title: "Dashboard de Engajamento em Redes Sociais",
   description:
-    "Filterable engagement dashboard over pre-aggregated post data (platform x category x creator tier x sponsorship x month).",
+    "Dashboard de engajamento filtrável sobre dados de posts pré-agregados (plataforma x categoria x tier de criador x patrocínio x mês).",
 };
 
 export default function RootLayout({
@@ -34,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${inter.variable}`}>
+    <html lang="pt-BR" className={`${fraunces.variable} ${inter.variable}`}>
       <body>
         <ThemeRegistry>{children}</ThemeRegistry>
       </body>

@@ -145,10 +145,10 @@ export function computeLiftVsBaseline(
 
   const baselineLabel =
     filters.platforms.length === 1
-      ? `${filters.platforms[0]} average`
+      ? `média de ${filters.platforms[0]}`
       : filters.platforms.length > 1
-      ? "selected platforms' average"
-      : "global average";
+      ? "média das plataformas selecionadas"
+      : "média global";
 
   let lift: number | null = null;
   if (

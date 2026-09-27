@@ -15,6 +15,10 @@ import {
 // everywhere else in the app. If a comparison doesn't clear the
 // confidence floor, we say so instead of forcing a recommendation --
 // same honesty rule as the rest of the dashboard.
+//
+// All user-facing strings below are in Portuguese (PT-BR) per leader
+// request -- only the copy was translated, the comparison logic and
+// thresholds are untouched.
 // ---------------------------------------------------------------------
 
 export type RecommendationTone = "positive" | "negative" | "neutral" | "insufficient";
@@ -42,25 +46,25 @@ export function describeSegment(filters: Filters): string {
     filters.platforms.length === 1
       ? filters.platforms[0]
       : filters.platforms.length > 1
-      ? `${filters.platforms.length} selected platforms`
-      : "all platforms"
+      ? `${filters.platforms.length} plataformas selecionadas`
+      : "todas as plataformas"
   );
   parts.push(
     filters.categories.length === 1
       ? filters.categories[0]
       : filters.categories.length > 1
-      ? `${filters.categories.length} selected categories`
-      : "all categories"
+      ? `${filters.categories.length} categorias selecionadas`
+      : "todas as categorias"
   );
   parts.push(
     filters.tiers.length === 1
-      ? `${filters.tiers[0]}-tier creators`
+      ? `criadores tier ${filters.tiers[0]}`
       : filters.tiers.length > 1
-      ? `${filters.tiers.length} selected creator tiers`
-      : "all creator tiers"
+      ? `${filters.tiers.length} tiers de criador selecionados`
+      : "todos os tiers de criador"
   );
   if (filters.sponsored !== "all") {
-    parts.push(filters.sponsored === "sponsored" ? "sponsored posts only" : "organic posts only");
+    parts.push(filters.sponsored === "sponsored" ? "somente posts patrocinados" : "somente posts orgânicos");
   }
   return parts.join(", ");
 }
@@ -83,10 +87,10 @@ export function buildSponsorRecommendation(
   if (cmp.medianGroupLift === null || dataTier(cmp.minGroupN) === "insufficient") {
     return {
       id: "sponsorship",
-      title: "Should you sponsor this segment?",
-      body: `There isn't enough matched data (organic and sponsored posts in the same platform x category x creator-tier group) for ${segment} to say whether sponsoring pays off here.`,
+      title: "Vale a pena patrocinar este segmento?",
+      body: `Não há dados pareados suficientes (posts orgânicos e patrocinados no mesmo grupo de plataforma x categoria x tier de criador) para ${segment} para dizer se patrocinar compensa aqui.`,
       action:
-        "Widen the filter (drop the creator-tier or category filter) or wait for more sponsored posts to accumulate in this segment before deciding.",
+        "Amplie o filtro (remova o filtro de tier de criador ou categoria) ou aguarde mais posts patrocinados se acumularem neste segmento antes de decidir.",
       tone: "insufficient",
     };
   }
@@ -94,37 +98,37 @@ export function buildSponsorRecommendation(
   const pct = (cmp.medianGroupLift - 1) * 100;
   const thin = dataTier(cmp.minGroupN) === "thin";
   const thinNote = thin
-    ? " (based on a fairly small number of matched posts -- treat this as a directional signal, not a firm number)"
+    ? " (baseado em um número pequeno de posts pareados -- trate como um sinal direcional, não um número definitivo)"
     : "";
 
   if (pct >= MEANINGFUL_SPONSOR_DIFF_PCT) {
     return {
       id: "sponsorship",
-      title: "Should you sponsor this segment?",
-      body: `Sponsored posts in ${segment} score ${pct.toFixed(1)}% higher engagement than matched organic posts${thinNote}.`,
+      title: "Vale a pena patrocinar este segmento?",
+      body: `Posts patrocinados em ${segment} têm engajamento ${pct.toFixed(1)}% maior que posts orgânicos pareados${thinNote}.`,
       action:
-        "This is one of the segments where sponsorship shows a real edge -- it's a reasonable place to prioritize sponsorship budget over segments with no measurable lift.",
+        "Este é um dos segmentos em que o patrocínio mostra uma vantagem real -- é um lugar razoável para priorizar o orçamento de patrocínio em relação a segmentos sem lift mensurável.",
       tone: "positive",
     };
   }
   if (pct <= -MEANINGFUL_SPONSOR_DIFF_PCT) {
     return {
       id: "sponsorship",
-      title: "Should you sponsor this segment?",
-      body: `Sponsored posts in ${segment} score ${Math.abs(pct).toFixed(1)}% lower engagement than matched organic posts${thinNote}.`,
+      title: "Vale a pena patrocinar este segmento?",
+      body: `Posts patrocinados em ${segment} têm engajamento ${Math.abs(pct).toFixed(1)}% menor que posts orgânicos pareados${thinNote}.`,
       action:
-        "Don't pay a premium to sponsor content in this segment on engagement grounds alone -- organic performs at least as well here.",
+        "Não pague um prêmio para patrocinar conteúdo neste segmento apenas por engajamento -- o orgânico performa pelo menos tão bem aqui.",
       tone: "negative",
     };
   }
   return {
     id: "sponsorship",
-    title: "Should you sponsor this segment?",
-    body: `Sponsored and organic posts in ${segment} perform about the same (${pct >= 0 ? "+" : ""}${pct.toFixed(
+    title: "Vale a pena patrocinar este segmento?",
+    body: `Posts patrocinados e orgânicos em ${segment} têm desempenho parecido (${pct >= 0 ? "+" : ""}${pct.toFixed(
       1
-    )}%, within normal variation)${thinNote}.`,
+    )}%, dentro da variação normal)${thinNote}.`,
     action:
-      "Sponsorship isn't buying extra engagement in this segment -- only sponsor here for reasons other than engagement (reach, relationship, contractual), not to chase engagement lift.",
+      "O patrocínio não está comprando engajamento extra neste segmento -- só patrocine aqui por outros motivos além de engajamento (alcance, relacionamento, contrato), não para buscar lift de engajamento.",
     tone: "neutral",
   };
 }
@@ -135,8 +139,8 @@ const AXIS_CONFIG: Record<
   AxisKey,
   { legendKey: "category" | "creator_tier"; label: string; title: string }
 > = {
-  categories: { legendKey: "category", label: "category", title: "Category focus" },
-  tiers: { legendKey: "creator_tier", label: "creator tier", title: "Creator-tier focus" },
+  categories: { legendKey: "category", label: "categoria", title: "Foco de categoria" },
+  tiers: { legendKey: "creator_tier", label: "tier de criador", title: "Foco de tier de criador" },
 };
 
 /**
@@ -156,8 +160,8 @@ export function buildAxisRecommendation(file: AggregatesFile, filters: Filters, 
     return {
       id: axis,
       title,
-      body: `Select exactly one ${label} (on top of your other filters) to see how it compares against the alternatives.`,
-      action: `Narrow the ${label} filter above to get a segment-specific comparison.`,
+      body: `Selecione exatamente uma opção de ${label} (além dos outros filtros) para ver como ela se compara às alternativas.`,
+      action: `Restrinja o filtro de ${label} acima para obter uma comparação específica do segmento.`,
       tone: "insufficient",
     };
   }
@@ -169,8 +173,8 @@ export function buildAxisRecommendation(file: AggregatesFile, filters: Filters, 
     return {
       id: axis,
       title,
-      body: `Not enough posts for ${current} under these filters to compare it fairly against other ${label} options.`,
-      action: "Widen the filters (e.g. remove the date range or creator-tier filter) and check again.",
+      body: `Não há posts suficientes para ${current} com estes filtros para compará-lo de forma justa com outras opções de ${label}.`,
+      action: "Amplie os filtros (por exemplo, remova o período ou o filtro de tier de criador) e verifique novamente.",
       tone: "insufficient",
     };
   }
@@ -195,8 +199,8 @@ export function buildAxisRecommendation(file: AggregatesFile, filters: Filters, 
     return {
       id: axis,
       title,
-      body: `None of the other ${label} options have enough matching posts under these filters to compare against ${current}.`,
-      action: "Widen the filters and check again once more data is available for the alternatives.",
+      body: `Nenhuma das outras opções de ${label} tem posts suficientes com estes filtros para comparar com ${current}.`,
+      action: "Amplie os filtros e verifique novamente quando houver mais dados disponíveis para as alternativas.",
       tone: "insufficient",
     };
   }
@@ -208,7 +212,7 @@ export function buildAxisRecommendation(file: AggregatesFile, filters: Filters, 
     dataTier(currentResult.n) === "thin" ||
     dataTier(best.result.n) === "thin" ||
     dataTier(worst.result.n) === "thin";
-  const thinNote = anyThin ? " (small sample on at least one side -- treat as directional)" : "";
+  const thinNote = anyThin ? " (amostra pequena em pelo menos um dos lados -- trate como direcional)" : "";
 
   const betterFound = best.value !== current && diffBestPct >= MEANINGFUL_DIFF_PCT;
   const worseFound = worst.value !== current && diffWorstPct <= -MEANINGFUL_DIFF_PCT;
@@ -217,10 +221,10 @@ export function buildAxisRecommendation(file: AggregatesFile, filters: Filters, 
     return {
       id: axis,
       title,
-      body: `Under these filters, ${current} performs about the same as the other ${label} options -- no meaningful gap either way (best alternative ${
+      body: `Com estes filtros, ${current} tem desempenho parecido com as outras opções de ${label} -- sem diferença relevante em nenhum sentido (melhor alternativa, ${
         best.value
-      } is ${diffBestPct >= 0 ? "+" : ""}${diffBestPct.toFixed(1)}%)${thinNote}.`,
-      action: `No urgent reason to shift focus away from ${current} on engagement grounds alone.`,
+      }, é ${diffBestPct >= 0 ? "+" : ""}${diffBestPct.toFixed(1)}%)${thinNote}.`,
+      action: `Não há motivo urgente para tirar o foco de ${current} apenas por engajamento.`,
       tone: "neutral",
     };
   }
@@ -228,14 +232,14 @@ export function buildAxisRecommendation(file: AggregatesFile, filters: Filters, 
   const sentences: string[] = [];
   if (betterFound) {
     sentences.push(
-      `${best.value} performs ${diffBestPct.toFixed(1)}% better than ${current} under these filters (${fmtPct(
+      `${best.value} tem desempenho ${diffBestPct.toFixed(1)}% melhor que ${current} com estes filtros (${fmtPct(
         best.result.weightedEngagementRate
       )} vs. ${fmtPct(currentRate)}).`
     );
   }
   if (worseFound) {
     sentences.push(
-      `${worst.value} performs ${Math.abs(diffWorstPct).toFixed(1)}% worse than ${current} (${fmtPct(
+      `${worst.value} tem desempenho ${Math.abs(diffWorstPct).toFixed(1)}% pior que ${current} (${fmtPct(
         worst.result.weightedEngagementRate
       )} vs. ${fmtPct(currentRate)}).`
     );
@@ -246,8 +250,8 @@ export function buildAxisRecommendation(file: AggregatesFile, filters: Filters, 
     title,
     body: `${sentences.join(" ")}${thinNote}`,
     action: betterFound
-      ? `Consider shifting some of the content mix from ${current} toward ${best.value} for this combination of filters, and monitor whether the gap holds up over the next few weeks.`
-      : `${current} is still the better of the two -- no reason to move toward ${worst.value} based on engagement.`,
+      ? `Considere deslocar parte do mix de conteúdo de ${current} para ${best.value} nesta combinação de filtros, e acompanhe se a diferença se mantém nas próximas semanas.`
+      : `${current} ainda é a melhor opção entre as duas -- sem motivo para migrar para ${worst.value} com base em engajamento.`,
     tone: betterFound ? "positive" : "neutral",
   };
 }

@@ -13,9 +13,7 @@ import {
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import { dataTier } from "@/lib/aggregate-utils";
-import DataConfidenceDot, {
-  INSUFFICIENT_DATA_MESSAGE,
-} from "./DataConfidenceDot";
+import DataConfidenceDot from "./DataConfidenceDot";
 
 function fmtInt(n: number | null): string {
   if (n === null || Number.isNaN(n)) return "-";
@@ -49,13 +47,11 @@ export default function SponsoredCompare({
   organic,
   sponsored,
   medianGroupLift,
-  groupCount,
   minGroupN,
 }: {
   organic: CompareSide;
   sponsored: CompareSide;
   medianGroupLift: number | null;
-  groupCount: number;
   minGroupN: number;
 }) {
   const c = PALETTE;
@@ -64,8 +60,8 @@ export default function SponsoredCompare({
   const sponsoredRate = sponsored.weightedEngagementRate;
 
   const data = [
-    { name: "Organic", ratePct: organicRate ? organicRate * 100 : 0 },
-    { name: "Sponsored", ratePct: sponsoredRate ? sponsoredRate * 100 : 0 },
+    { name: "Orgânico", ratePct: organicRate ? organicRate * 100 : 0 },
+    { name: "Patrocinado", ratePct: sponsoredRate ? sponsoredRate * 100 : 0 },
   ];
 
   // Headline lift is the MEDIAN across matched platform x category x tier
@@ -73,6 +69,9 @@ export default function SponsoredCompare({
   // shown in the cards below (which can mix group composition between the
   // organic and sponsored sides).
   const lift = medianGroupLift !== null ? medianGroupLift - 1 : null;
+  // A lift that rounds to 0.0% either way isn't an informative number --
+  // per leader feedback, don't show a "+0.0%" that reads as a real result.
+  const liftDisplay = lift !== null && Math.abs(lift * 100) >= 0.05 ? lift : null;
 
   // Gold highlights only the standout side (the one with the higher rate),
   // per the "one reserved accent" rule -- not a fixed organic/sponsored
@@ -129,28 +128,32 @@ export default function SponsoredCompare({
               height: 7,
               borderRadius: "50%",
               mr: "8px",
-              bgcolor: winner ? "primary.main" : "custom.seriesB",
+              // Same two hex values as the bar chart's PALETTE (c.highlight /
+              // c.base) -- previously this used theme tokens (primary.main /
+              // custom.seriesB) which are visually close but NOT identical
+              // to the bar colors, so the dot and the bar next to it looked
+              // like two different palettes. Root cause of the reported
+              // grey/brown mismatch.
+              bgcolor: winner ? c.highlight : c.base,
             }}
           />
           {tag}
         </Typography>
         {tier === "insufficient" ? (
-          <Typography sx={{ fontSize: "0.78rem", fontWeight: 500, color: "text.secondary", mt: "8px" }}>
-            {INSUFFICIENT_DATA_MESSAGE}
+          <Typography sx={{ fontFamily: "var(--font-serif)", fontSize: "1.5rem", fontWeight: 600, mt: "8px", color: "text.disabled" }}>
+            -
           </Typography>
         ) : (
-          <>
-            <Typography
-              sx={{ fontFamily: "var(--font-serif)", fontSize: "1.5rem", fontWeight: 600, mt: "8px", color: "text.primary" }}
-            >
-              {fmtPct(rate)}
-              <DataConfidenceDot n={n} />
-            </Typography>
-            <Typography sx={{ fontSize: "0.76rem", color: "text.disabled", mt: "2px" }}>
-              {fmtInt(n)} posts
-            </Typography>
-          </>
+          <Typography
+            sx={{ fontFamily: "var(--font-serif)", fontSize: "1.5rem", fontWeight: 600, mt: "8px", color: "text.primary" }}
+          >
+            {fmtPct(rate)}
+            <DataConfidenceDot n={n} />
+          </Typography>
         )}
+        <Typography sx={{ fontSize: "0.76rem", color: "text.disabled", mt: "2px" }}>
+          {fmtInt(n)}
+        </Typography>
       </Box>
     );
   }
@@ -165,26 +168,19 @@ export default function SponsoredCompare({
       }}
     >
       <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        <Card tag="Organic" tier={organicTier} rate={organicRate} n={organic.n} winner={organicIsWinner} />
-        <Card tag="Sponsored" tier={sponsoredTier} rate={sponsoredRate} n={sponsored.n} winner={sponsoredIsWinner} />
-        {lift !== null ? (
-          <Typography sx={{ fontSize: "0.8rem", color: "text.secondary", mt: "6px", lineHeight: 1.6 }}>
-            Sponsored is{" "}
-            <Box component="strong" sx={{ color: "custom.goldStrong", fontWeight: 600 }}>
-              {lift >= 0 ? "+" : ""}
-              {(lift * 100).toFixed(1)}%
-            </Box>{" "}
-            vs. organic
-            {liftTier === "thin" && <DataConfidenceDot n={minGroupN} />}{" "}
-            -- median across{" "}
-            {liftTier === "full" ? `${groupCount} matched` : "matched"} platform
-            x category x creator-tier groups, comparing only similar
-            segments to each other. Not the raw pooled cards above, which
-            can mix group composition between organic and sponsored.
+        <Card tag="Orgânico" tier={organicTier} rate={organicRate} n={organic.n} winner={organicIsWinner} />
+        <Card tag="Patrocinado" tier={sponsoredTier} rate={sponsoredRate} n={sponsored.n} winner={sponsoredIsWinner} />
+        {liftDisplay !== null ? (
+          <Typography
+            sx={{ fontFamily: "var(--font-serif)", fontSize: "1.1rem", fontWeight: 600, color: "custom.goldStrong", mt: "6px" }}
+          >
+            {liftDisplay >= 0 ? "+" : ""}
+            {(liftDisplay * 100).toFixed(1)}%
+            {liftTier === "thin" && <DataConfidenceDot n={minGroupN} />}
           </Typography>
         ) : (
-          <Typography sx={{ fontSize: "0.8rem", color: "text.secondary", mt: "6px" }}>
-            {INSUFFICIENT_DATA_MESSAGE}
+          <Typography sx={{ fontSize: "1.1rem", fontWeight: 600, color: "text.disabled", mt: "6px" }}>
+            -
           </Typography>
         )}
       </Box>
@@ -212,7 +208,7 @@ export default function SponsoredCompare({
               width={80}
             />
             <Tooltip
-              formatter={(value: number) => [`${value.toFixed(2)}%`, "Weighted ER"]}
+              formatter={(value: number) => [`${value.toFixed(2)}%`, "TE ponderada"]}
               contentStyle={{
                 borderRadius: 8,
                 border: `1px solid ${c.tooltipBorder}`,

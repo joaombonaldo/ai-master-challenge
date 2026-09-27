@@ -45,7 +45,7 @@ export default function AppTopBar({
           <Chip
             size="small"
             variant="outlined"
-            label={`Live · data as of ${generatedDate}`}
+            label={`Ao vivo · dados de ${generatedDate}`}
             icon={
               <Box
                 aria-hidden="true"

@@ -15,7 +15,7 @@ function fmtLift(lift: number | null): string {
 }
 
 const LIFT_HELP_TEXT =
-  "How much better or worse your current selection's engagement rate is compared to a baseline (the platform overall, or all platforms if none is selected).";
+  "Quanto melhor ou pior é a taxa de engajamento da seleção atual em comparação a uma referência (a plataforma como um todo, ou todas as plataformas se nenhuma estiver selecionada).";
 
 /**
  * Hero-row lift indicator: current filtered selection's weighted
@@ -31,7 +31,7 @@ export default function LiftIndicator({ result }: { result: LiftResult }) {
   const tier = dataTier(result.n);
   const label = (
     <>
-      Lift vs. baseline
+      Lift vs. referência
       <HelpTip text={LIFT_HELP_TEXT} />
     </>
   );
@@ -49,7 +49,7 @@ export default function LiftIndicator({ result }: { result: LiftResult }) {
           <DataConfidenceDot n={result.n} />
         </>
       }
-      sub={`weighted ER vs. ${result.baselineLabel} (${result.baselineN.toLocaleString()} posts)`}
+      sub={`TE ponderada vs. ${result.baselineLabel} (${result.baselineN.toLocaleString()} posts)`}
     />
   );
 }

@@ -18,13 +18,6 @@ import Button from "@mui/material/Button";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import FormControl from "@mui/material/FormControl";
-import InputLabel from "@mui/material/InputLabel";
-import Accordion from "@mui/material/Accordion";
-import AccordionSummary from "@mui/material/AccordionSummary";
-import AccordionDetails from "@mui/material/AccordionDetails";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import Tabs from "@mui/material/Tabs";
-import Tab from "@mui/material/Tab";
 import Divider from "@mui/material/Divider";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -40,10 +33,10 @@ import DataConfidenceDot, {
   INSUFFICIENT_DATA_MESSAGE,
 } from "./components/DataConfidenceDot";
 import HelpTip from "./components/HelpTip";
-import RecommendationsPanel from "./components/RecommendationsPanel";
-import ExecutiveSummary from "./components/ExecutiveSummary";
+import LlmReportSection from "./components/LlmReportSection";
 import { buildRecommendations } from "@/lib/recommendations";
 import { buildExecutiveSummaryPayload } from "@/lib/summary";
+import { buildLlmRecommendationsPayload } from "@/lib/llm-recommendations";
 
 function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -59,29 +52,54 @@ function fmtPct(n: number | null): string {
   return `${(n * 100).toFixed(2)}%`;
 }
 
-type Tab = "platform" | "sponsored" | "recommendations";
-
-function Panel({ children }: { children: React.ReactNode }) {
+function Panel({ children, dense }: { children: React.ReactNode; dense?: boolean }) {
   return (
-    <Card variant="outlined" sx={{ p: "24px 28px", mb: "24px", borderRadius: "14px" }}>
+    <Card
+      variant="outlined"
+      sx={
+        dense
+          ? { p: "12px 20px", mb: "16px", borderRadius: "12px" }
+          : { p: "24px 28px", mb: "24px", borderRadius: "14px" }
+      }
+    >
       {children}
     </Card>
   );
 }
 
-function PanelHeader({ title, subtitle, action }: { title: string; subtitle: React.ReactNode; action?: React.ReactNode }) {
+function PanelHeader({
+  title,
+  subtitle,
+  action,
+  dense,
+}: {
+  title: string;
+  subtitle: React.ReactNode;
+  action?: React.ReactNode;
+  dense?: boolean;
+}) {
   return (
-    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", mb: "20px" }}>
+    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", mb: dense ? "10px" : "20px" }}>
       <Box>
-        <Typography component="h2" sx={{ fontFamily: "var(--font-serif)", fontSize: "1.15rem", fontWeight: 600, color: "text.primary", m: 0 }}>
+        <Typography component="h2" sx={{ fontFamily: "var(--font-serif)", fontSize: dense ? "0.9rem" : "1.15rem", fontWeight: 600, color: "text.primary", m: 0 }}>
           {title}
         </Typography>
-        <Typography sx={{ fontSize: "0.8rem", color: "text.secondary", mt: "3px" }}>{subtitle}</Typography>
+        <Typography sx={{ fontSize: "0.72rem", color: "text.secondary", mt: "2px" }}>{subtitle}</Typography>
       </Box>
       {action}
     </Box>
   );
 }
+
+const FILTER_LABEL_SX = {
+  display: "block",
+  fontSize: "0.62rem",
+  fontWeight: 600,
+  textTransform: "uppercase" as const,
+  letterSpacing: "0.06em",
+  color: "text.disabled",
+  mb: "4px",
+};
 
 function FilterChips({
   label,
@@ -95,14 +113,11 @@ function FilterChips({
   onToggle: (value: string) => void;
 }) {
   return (
-    <Box sx={{ minWidth: 0 }}>
-      <Typography
-        component="label"
-        sx={{ display: "block", fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "text.disabled", mb: "10px" }}
-      >
+    <Box sx={{ flexShrink: 0 }}>
+      <Typography component="label" sx={FILTER_LABEL_SX}>
         {label}
       </Typography>
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+      <Box sx={{ display: "flex", flexWrap: "nowrap", gap: "4px" }}>
         {options.map((opt) => {
           const active = selected.includes(opt);
           return (
@@ -113,7 +128,8 @@ function FilterChips({
               onClick={() => onToggle(opt)}
               variant={active ? "filled" : "outlined"}
               sx={{
-                fontSize: "0.78rem",
+                height: "22px",
+                fontSize: "0.72rem",
                 fontWeight: 500,
                 borderRadius: "999px",
                 bgcolor: active ? "custom.goldSoft" : "transparent",
@@ -135,11 +151,11 @@ export default function DashboardClient({
   aggregates: AggregatesFile;
 }) {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [tab, setTab] = useState<Tab>("platform");
 
   const months = aggregates.legend.month;
-  const minMonth = months[0];
-  const maxMonth = months[months.length - 1];
+  // Most recent month first, per leader feedback -- these lists are for
+  // picking a range endpoint, and people scan for "recent" before "oldest".
+  const monthsDesc = useMemo(() => [...months].reverse(), [months]);
 
   const result = useMemo(
     () => aggregate(aggregates, filters),
@@ -171,6 +187,31 @@ export default function DashboardClient({
     [filters, result, baselineLift, sponsoredCompare, recommendations]
   );
 
+  const llmRecommendationsPayload = useMemo(
+    () => buildLlmRecommendationsPayload(aggregates, filters),
+    [aggregates, filters]
+  );
+
+  // Month-range setters: auto-correct the other endpoint so "from" can
+  // never end up after "to". Both dropdowns always render the identical
+  // full month list (same order, most-recent-first) -- no options are
+  // disabled or hidden per leader feedback; an invalid combination is
+  // prevented only by bumping the other endpoint to match.
+  function setMonthFrom(value: string | null) {
+    setFilters((f) => ({
+      ...f,
+      monthFrom: value,
+      monthTo: value && f.monthTo && f.monthTo < value ? value : f.monthTo,
+    }));
+  }
+  function setMonthTo(value: string | null) {
+    setFilters((f) => ({
+      ...f,
+      monthTo: value,
+      monthFrom: value && f.monthFrom && f.monthFrom > value ? value : f.monthFrom,
+    }));
+  }
+
   const activeFilterCount =
     filters.platforms.length +
     filters.categories.length +
@@ -181,50 +222,35 @@ export default function DashboardClient({
 
   return (
     <>
-      {/* ---------- Filters: one compact strip, advanced (dates) collapsed ---------- */}
-      <Panel>
-        <PanelHeader
-          title="Filters"
-          subtitle={
-            activeFilterCount > 0
-              ? `${activeFilterCount} filter${activeFilterCount === 1 ? "" : "s"} active`
-              : "Showing all data"
-          }
-          action={
-            <Button variant="outlined" size="small" onClick={() => setFilters(DEFAULT_FILTERS)}>
-              Reset filters
-            </Button>
-          }
-        />
-        <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "24px 32px" }}>
+      {/* ---------- Filters: one dense utility strip, filters row + status/reset row below ---------- */}
+      <Panel dense>
+        <Box sx={{ display: "flex", flexWrap: "nowrap", alignItems: "flex-end", gap: "28px", overflowX: "auto", pb: "2px" }}>
           <FilterChips
-            label="Platform"
+            label="Plataforma"
             options={aggregates.legend.platform}
             selected={filters.platforms}
             onToggle={(p) => setFilters((f) => ({ ...f, platforms: toggle(f.platforms, p) }))}
           />
           <FilterChips
-            label="Category"
+            label="Categoria"
             options={aggregates.legend.category}
             selected={filters.categories}
             onToggle={(c) => setFilters((f) => ({ ...f, categories: toggle(f.categories, c) }))}
           />
           <FilterChips
-            label="Creator tier"
+            label="Tier de criador"
             options={aggregates.legend.creator_tier}
             selected={filters.tiers}
             onToggle={(t) => setFilters((f) => ({ ...f, tiers: toggle(f.tiers, t) }))}
           />
-          <Box>
-            <Typography
-              component="label"
-              sx={{ display: "block", fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "text.disabled", mb: "10px" }}
-            >
-              Sponsorship
+          <Box sx={{ flexShrink: 0 }}>
+            <Typography component="label" sx={FILTER_LABEL_SX}>
+              Patrocínio
             </Typography>
-            <FormControl size="small" sx={{ minWidth: 170 }}>
+            <FormControl size="small" sx={{ minWidth: 130 }}>
               <Select
                 value={filters.sponsored}
+                sx={{ height: "30px", fontSize: "0.78rem" }}
                 onChange={(e) =>
                   setFilters((f) => ({
                     ...f,
@@ -232,58 +258,25 @@ export default function DashboardClient({
                   }))
                 }
               >
-                <MenuItem value="all">All posts</MenuItem>
-                <MenuItem value="sponsored">Sponsored only</MenuItem>
-                <MenuItem value="organic">Organic only</MenuItem>
+                <MenuItem value="all">Todos os posts</MenuItem>
+                <MenuItem value="sponsored">Somente patrocinados</MenuItem>
+                <MenuItem value="organic">Somente orgânicos</MenuItem>
               </Select>
             </FormControl>
           </Box>
-        </Box>
-
-        <Accordion
-          disableGutters
-          elevation={0}
-          square
-          sx={{
-            mt: "20px",
-            bgcolor: "transparent",
-            "&::before": { display: "none" },
-            borderTop: 1,
-            borderColor: "divider",
-          }}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon fontSize="small" />} sx={{ px: 0, minHeight: 0 }}>
-            <Typography sx={{ fontSize: "0.78rem", fontWeight: 600, color: "text.secondary" }}>
-              Advanced: date range
-              {(filters.monthFrom || filters.monthTo) ? " (active)" : ""}
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails sx={{ px: 0 }}>
-            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "20px", maxWidth: 460 }}>
-              <FormControl size="small" fullWidth>
-                <InputLabel>From month</InputLabel>
+          <Box sx={{ display: "flex", flexWrap: "nowrap", gap: "8px", flexShrink: 0 }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography component="label" sx={FILTER_LABEL_SX}>
+                Mês inicial
+              </Typography>
+              <FormControl size="small" sx={{ minWidth: 92, width: 92 }}>
                 <Select
-                  label="From month"
                   value={filters.monthFrom ?? ""}
-                  onChange={(e) => setFilters((f) => ({ ...f, monthFrom: e.target.value || null }))}
+                  sx={{ height: "30px", fontSize: "0.78rem" }}
+                  onChange={(e) => setMonthFrom(e.target.value || null)}
                 >
-                  <MenuItem value="">{minMonth} (earliest)</MenuItem>
-                  {months.map((m) => (
-                    <MenuItem key={m} value={m}>
-                      {m}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl size="small" fullWidth>
-                <InputLabel>To month</InputLabel>
-                <Select
-                  label="To month"
-                  value={filters.monthTo ?? ""}
-                  onChange={(e) => setFilters((f) => ({ ...f, monthTo: e.target.value || null }))}
-                >
-                  <MenuItem value="">{maxMonth} (latest)</MenuItem>
-                  {months.map((m) => (
+                  <MenuItem value="">Todos</MenuItem>
+                  {monthsDesc.map((m) => (
                     <MenuItem key={m} value={m}>
                       {m}
                     </MenuItem>
@@ -291,15 +284,53 @@ export default function DashboardClient({
                 </Select>
               </FormControl>
             </Box>
-          </AccordionDetails>
-        </Accordion>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography component="label" sx={FILTER_LABEL_SX}>
+                Mês final
+              </Typography>
+              <FormControl size="small" sx={{ minWidth: 92, width: 92 }}>
+                <Select
+                  value={filters.monthTo ?? ""}
+                  sx={{ height: "30px", fontSize: "0.78rem" }}
+                  onChange={(e) => setMonthTo(e.target.value || null)}
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  {monthsDesc.map((m) => (
+                    <MenuItem key={m} value={m}>
+                      {m}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+          </Box>
+        </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: "14px", mt: "12px" }}>
+          <Typography sx={{ fontSize: "0.72rem", color: "text.secondary", whiteSpace: "nowrap" }}>
+            {activeFilterCount > 0
+              ? `${activeFilterCount} filtro${activeFilterCount === 1 ? "" : "s"} ativo${activeFilterCount === 1 ? "" : "s"}`
+              : "Mostrando todos os dados"}
+          </Typography>
+          <Button variant="outlined" size="small" sx={{ height: "30px" }} onClick={() => setFilters(DEFAULT_FILTERS)}>
+            Limpar
+          </Button>
+        </Box>
+      </Panel>
+
+      {/* ---------- Section: unified LLM report (executive summary + recommendations), one button, one section ---------- */}
+      <Panel>
+        <LlmReportSection
+          summaryPayload={summaryPayload}
+          recommendationsPayload={llmRecommendationsPayload}
+          resetKey={JSON.stringify(filters)}
+        />
       </Panel>
 
       {/* ---------- Headline KPIs: the 4 numbers that matter most, up top ---------- */}
       <Panel>
         <PanelHeader
-          title="Result"
-          subtitle={`${result.n.toLocaleString()} posts match the current filters`}
+          title="Resultado"
+          subtitle={`${result.n.toLocaleString()} posts correspondem aos filtros atuais`}
         />
 
         <Box
@@ -315,13 +346,13 @@ export default function DashboardClient({
           }}
         >
           <HeroCell label="Posts" value={fmtInt(result.n)} />
-          <HeroCell label="Total views" value={fmtInt(result.sumViews)} />
+          <HeroCell label="Total de visualizações" value={fmtInt(result.sumViews)} />
           <HeroCell
             lead
             label={
               <>
-                Weighted engagement rate
-                <HelpTip text="Likes + shares + comments, divided by views, combined across every matching post so bigger posts count more." />
+                Taxa de engajamento ponderada
+                <HelpTip text="Curtidas + compartilhamentos + comentários, divididos pelas visualizações, combinados entre todos os posts correspondentes, então posts maiores contam mais." />
               </>
             }
             value={fmtPct(result.weightedEngagementRate)}
@@ -332,19 +363,19 @@ export default function DashboardClient({
               medianGroupLift === null ? "insufficient" : dataTier(sponsoredCompare.minGroupN);
             if (sponsoredVsOrganicTier === "insufficient" || medianGroupLift === null) {
               return (
-                <HeroCell label="Sponsored vs. organic (fair)" value={INSUFFICIENT_DATA_MESSAGE} muted />
+                <HeroCell label="Patrocinado vs. orgânico (justo)" value={INSUFFICIENT_DATA_MESSAGE} muted />
               );
             }
             return (
               <HeroCell
-                label="Sponsored vs. organic (fair)"
+                label="Patrocinado vs. orgânico (justo)"
                 value={
                   <>
                     {`${medianGroupLift >= 1 ? "+" : ""}${((medianGroupLift - 1) * 100).toFixed(1)}%`}
                     <DataConfidenceDot n={sponsoredCompare.minGroupN} />
                   </>
                 }
-                sub="median across matched platform x category x tier groups"
+                sub="mediana entre grupos pareados de plataforma x categoria x tier"
               />
             );
           })()}
@@ -359,11 +390,11 @@ export default function DashboardClient({
           }}
         >
           {[
-            ["Total likes", fmtInt(result.sumLikes)],
-            ["Total shares", fmtInt(result.sumShares)],
-            ["Total comments", fmtInt(result.sumComments)],
-            ["Avg views / post", fmtInt(result.avgViewsPerPost)],
-            ["Avg followers (creator)", fmtInt(result.avgFollowers)],
+            ["Total de curtidas", fmtInt(result.sumLikes)],
+            ["Total de compartilhamentos", fmtInt(result.sumShares)],
+            ["Total de comentários", fmtInt(result.sumComments)],
+            ["Média de visualizações / post", fmtInt(result.avgViewsPerPost)],
+            ["Média de seguidores (criador)", fmtInt(result.avgFollowers)],
           ].map(([label, value]) => (
             <Box key={label} sx={{ border: 1, borderColor: "divider", borderRadius: "10px", p: "12px 14px", textAlign: "center" }}>
               <Typography sx={{ fontSize: "0.68rem", color: "text.disabled", textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 600 }}>
@@ -377,117 +408,52 @@ export default function DashboardClient({
         </Box>
       </Panel>
 
-      {/* ---------- Executive summary (Phase 3d): optional LLM-assisted recap ---------- */}
+      {/* ---------- Section 1: platform breakdown -- always visible, no tab gate ---------- */}
       <Panel>
-        <ExecutiveSummary payload={summaryPayload} key={JSON.stringify(filters)} />
+        <PanelHeader
+          title="Detalhamento por plataforma"
+          subtitle="Como a taxa de engajamento se compara entre plataformas agora"
+        />
+        <PlatformChart rows={byPlatform} />
+        <Divider sx={{ my: "20px" }} />
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Plataforma</TableCell>
+                <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Posts</TableCell>
+                <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Visualizações</TableCell>
+                <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>TE ponderada</TableCell>
+                <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Média visual./post</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {byPlatform.map((row) => (
+                <TableRow key={row.platform}>
+                  <TableCell sx={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 600, color: "text.primary" }}>
+                    <Box sx={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, bgcolor: platformColor(row.platform) }} />
+                    {row.platform}
+                  </TableCell>
+                  <TableCell sx={{ fontSize: "0.85rem" }}>{fmtInt(row.n)}</TableCell>
+                  <TableCell sx={{ fontSize: "0.85rem" }}>{fmtInt(row.sumViews)}</TableCell>
+                  <TableCell sx={{ fontSize: "0.85rem" }}>{fmtPct(row.weightedEngagementRate)}</TableCell>
+                  <TableCell sx={{ fontSize: "0.85rem" }}>{fmtInt(row.avgViewsPerPost)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Panel>
 
-      {/* ---------- Secondary detail: tabs instead of stacked panels ---------- */}
+      {/* ---------- Section 2: sponsored vs. organic -- always visible, no tab gate ---------- */}
       <Panel>
-        <Tabs
-          value={tab}
-          onChange={(_, v) => setTab(v)}
-          sx={{
-            minHeight: 0,
-            mb: "20px",
-            "& .MuiTabs-indicator": { display: "none" },
-          }}
-        >
-          {(
-            [
-              ["platform", "Breakdown by platform"],
-              ["sponsored", "Sponsored vs. organic"],
-              ["recommendations", "Recommendations"],
-            ] as [Tab, string][]
-          ).map(([value, label]) => (
-            <Tab
-              key={value}
-              value={value}
-              label={label}
-              disableRipple
-              sx={{
-                minHeight: 0,
-                textTransform: "none",
-                fontSize: "0.8rem",
-                fontWeight: 500,
-                borderRadius: "999px",
-                minWidth: 0,
-                px: "16px",
-                py: "7px",
-                mr: "4px",
-                color: "text.secondary",
-                "&.Mui-selected": {
-                  color: "custom.goldStrong",
-                  bgcolor: "custom.surfaceMuted",
-                  border: 1,
-                  borderColor: "custom.goldBorder",
-                },
-              }}
-            />
-          ))}
-        </Tabs>
-
-        {tab === "platform" && (
-          <Box>
-            <Typography sx={{ fontSize: "0.8rem", color: "text.secondary", mb: "16px" }}>
-              How engagement rate compares across platforms right now
-            </Typography>
-            <PlatformChart rows={byPlatform} />
-            <Divider sx={{ my: "20px" }} />
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Platform</TableCell>
-                    <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Posts</TableCell>
-                    <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Views</TableCell>
-                    <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Weighted ER</TableCell>
-                    <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Avg views/post</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {byPlatform.map((row) => (
-                    <TableRow key={row.platform}>
-                      <TableCell sx={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 600, color: "text.primary" }}>
-                        <Box sx={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, bgcolor: platformColor(row.platform) }} />
-                        {row.platform}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: "0.85rem" }}>{fmtInt(row.n)}</TableCell>
-                      <TableCell sx={{ fontSize: "0.85rem" }}>{fmtInt(row.sumViews)}</TableCell>
-                      <TableCell sx={{ fontSize: "0.85rem" }}>{fmtPct(row.weightedEngagementRate)}</TableCell>
-                      <TableCell sx={{ fontSize: "0.85rem" }}>{fmtInt(row.avgViewsPerPost)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Box>
-        )}
-
-        {tab === "sponsored" && (
-          <Box>
-            <Typography sx={{ fontSize: "0.8rem", color: "text.secondary", mb: "16px" }}>
-              Weighted engagement rate, within current filters
-            </Typography>
-            <SponsoredCompare
-              organic={organicResult}
-              sponsored={sponsoredResult}
-              medianGroupLift={medianGroupLift}
-              groupCount={sponsoredCompare.groupCount}
-              minGroupN={sponsoredCompare.minGroupN}
-            />
-          </Box>
-        )}
-
-        {tab === "recommendations" && (
-          <Box>
-            <Typography sx={{ fontSize: "0.8rem", color: "text.secondary", mb: "16px" }}>
-              Rule-based comparisons for the current filter selection -- not a prediction, just
-              plain arithmetic over the segments above
-            </Typography>
-            <RecommendationsPanel recommendations={recommendations} />
-          </Box>
-        )}
+        <PanelHeader title="Patrocinado vs. orgânico" subtitle="Comparação justa, pareada por plataforma x categoria x tier de criador" />
+        <SponsoredCompare
+          organic={organicResult}
+          sponsored={sponsoredResult}
+          medianGroupLift={medianGroupLift}
+          minGroupN={sponsoredCompare.minGroupN}
+        />
       </Panel>
     </>
   );

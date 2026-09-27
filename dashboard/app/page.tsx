@@ -36,12 +36,12 @@ export default function Page() {
               component="h1"
               sx={{ fontFamily: "var(--font-serif)", fontWeight: 600, fontSize: "2rem", letterSpacing: "-0.01em", m: "0 0 8px", color: "text.primary" }}
             >
-              Engagement across platforms
+              Engajamento nas plataformas
             </Typography>
             <Typography sx={{ color: "text.secondary", fontSize: "0.88rem", maxWidth: 620, lineHeight: 1.6 }}>
-              See what&apos;s driving engagement across Instagram, TikTok,
-              YouTube, Bilibili and RedNote. Filter by platform, category,
-              creator tier, sponsorship and month to explore.
+              Veja o que está impulsionando o engajamento no Instagram, TikTok,
+              YouTube, Bilibili e RedNote. Filtre por plataforma, categoria,
+              tier de criador, patrocínio e mês para explorar.
             </Typography>
           </Box>
           <Box sx={{ textAlign: "right", flexShrink: 0, pl: "24px", borderLeft: 1, borderColor: "divider" }}>
@@ -49,7 +49,7 @@ export default function Page() {
               {aggregates.row_count_source.toLocaleString()}
             </Typography>
             <Typography sx={{ fontSize: "0.68rem", color: "text.disabled", textTransform: "uppercase", letterSpacing: "0.06em", mt: "6px" }}>
-              Posts analyzed
+              Posts analisados
             </Typography>
           </Box>
         </Box>
