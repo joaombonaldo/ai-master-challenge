@@ -6,10 +6,17 @@ import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
 import type { ExecutiveSummaryPayload } from "@/lib/summary";
 import { buildTemplatedSummary } from "@/lib/summary";
 import type { LlmRecommendationsPayload } from "@/lib/llm-recommendations";
 import type { LlmRecommendation } from "@/app/api/recommendations/route";
+import { buildPresentationPrompt } from "@/lib/presentation-prompt";
 
 // ---------------------------------------------------------------------
 // Phase 3d/3c merge: "Gerar LLM Report" -- a single user action that fires
@@ -139,6 +146,9 @@ export default function LlmReportSection({
   const [state, setState] = useState<State>({ status: "idle" });
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+  const [promptText, setPromptText] = useState("");
+  const [copyLabel, setCopyLabel] = useState("Copiar");
 
   // Filters changed underneath the report: cancel whatever is in flight
   // and clear any previously rendered report. The user must click the
@@ -177,6 +187,30 @@ export default function LlmReportSection({
     state.status === "done" &&
     (state.summary.source === "llm" || state.recommendations.source === "llm");
 
+  function handleOpenPromptDialog() {
+    if (state.status !== "done") return;
+    const prompt = buildPresentationPrompt(
+      summaryPayload.segment,
+      summaryPayload.posts,
+      state.summary.text,
+      state.recommendations.items
+    );
+    setPromptText(prompt);
+    setCopyLabel("Copiar");
+    setPromptDialogOpen(true);
+  }
+
+  async function handleCopyPrompt() {
+    try {
+      await navigator.clipboard.writeText(promptText);
+      setCopyLabel("Copiado!");
+      setTimeout(() => setCopyLabel("Copiar"), 2000);
+    } catch {
+      setCopyLabel("Falha ao copiar");
+      setTimeout(() => setCopyLabel("Copiar"), 2000);
+    }
+  }
+
   return (
     <Box>
       <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
@@ -188,15 +222,28 @@ export default function LlmReportSection({
             Resumo executivo e recomendações para a seleção de filtros atual.
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={handleGenerate}
-          disabled={state.status === "loading"}
-          sx={{ flexShrink: 0 }}
-        >
-          {state.status === "loading" ? "Gerando..." : "Gerar LLM Report"}
-        </Button>
+        <Box sx={{ display: "flex", gap: "8px", flexShrink: 0, flexWrap: "wrap" }}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleGenerate}
+            disabled={state.status === "loading"}
+          >
+            {state.status === "loading" ? "Gerando..." : "Gerar LLM Report"}
+          </Button>
+          <Tooltip title={state.status !== "done" ? "Gere o relatório de IA primeiro" : ""}>
+            <span>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={handleOpenPromptDialog}
+                disabled={state.status !== "done"}
+              >
+                Gerar prompt de apresentação
+              </Button>
+            </span>
+          </Tooltip>
+        </Box>
       </Box>
 
       {state.status === "loading" && (
@@ -286,6 +333,40 @@ export default function LlmReportSection({
           )}
         </Box>
       )}
+
+      <Dialog
+        open={promptDialogOpen}
+        onClose={() => setPromptDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontFamily: "var(--font-serif)" }}>
+          Prompt para gerar apresentação
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: "0.8rem", color: "text.secondary", mb: "12px" }}>
+            Copie o texto abaixo (edite se quiser) e cole em qualquer ferramenta de IA
+            (ChatGPT, Gemini, Claude etc.) para gerar o conteúdo de uma apresentação de
+            PowerPoint com base nesta análise.
+          </Typography>
+          <TextField
+            value={promptText}
+            onChange={(e) => setPromptText(e.target.value)}
+            multiline
+            fullWidth
+            minRows={16}
+            maxRows={24}
+            sx={{ fontFamily: "monospace" }}
+            slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: "0.8rem" } } }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPromptDialogOpen(false)}>Fechar</Button>
+          <Button variant="contained" onClick={handleCopyPrompt}>
+            {copyLabel}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
