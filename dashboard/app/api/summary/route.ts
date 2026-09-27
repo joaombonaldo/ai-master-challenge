@@ -33,7 +33,8 @@ function isValidPayload(body: unknown): body is ExecutiveSummaryPayload {
   return (
     typeof p.segment === "string" &&
     typeof p.posts === "number" &&
-    Array.isArray(p.recommendations)
+    Array.isArray(p.recommendations) &&
+    Array.isArray(p.platformMetrics)
   );
 }
 
@@ -48,6 +49,15 @@ function buildPrompt(payload: ExecutiveSummaryPayload): string {
     baseline_label: payload.liftBaselineLabel,
     sponsored_vs_organic_pct: payload.sponsoredVsOrganicPct,
     sponsored_data_confidence: payload.sponsoredDataTier,
+    metricas_individuais_por_plataforma: payload.platformMetrics.map((p) => ({
+      plataforma: p.platform,
+      posts: p.posts,
+      visualizacoes_medias_por_post: p.avgViewsPerPost,
+      taxa_curtidas_pct: p.likeRatePct,
+      taxa_compartilhamentos_pct: p.shareRatePct,
+      taxa_comentarios_pct: p.commentRatePct,
+      confiabilidade_dado: p.confidence,
+    })),
     recommendations: payload.recommendations.map((r) => ({
       title: r.title,
       verdict: r.body,
@@ -60,6 +70,7 @@ function buildPrompt(payload: ExecutiveSummaryPayload): string {
     "Write the ENTIRE response in Brazilian Portuguese (PT-BR) -- every word, no English at all.",
     "Use plain, everyday language -- no statistics jargon (no 'p-value', 'intervalo de confiança', 'regressão', etc.).",
     "Be honest: if the numbers show no meaningful effect, say so plainly instead of inventing a strong story.",
+    "'metricas_individuais_por_plataforma' breaks the blended engagement rate into its parts per platform: visualizacoes_medias_por_post = reach, taxa_curtidas_pct = casual approval, taxa_compartilhamentos_pct = virality/distribution, taxa_comentarios_pct = conversation depth. A platform can lead in reach or shares without the blended rate showing it. This is informational context, not pre-validated for materiality like the other fields -- only mention it if a difference between platforms with 'full' confidence is large and obvious, phrase it as a mild observation (not a proven driver), and never let it override the honest 'no meaningful effect' conclusion if that's what the main numbers show. It is fine to say nothing about it if there's nothing notable.",
     "Write 100-150 words, 3-5 short sentences, no bullet points, no headers, no markdown.",
     "Do not mention data files, internal codes, or how the numbers were computed -- just state the findings and what to do about them.",
     "",

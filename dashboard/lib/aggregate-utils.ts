@@ -11,6 +11,9 @@ export const DEFAULT_FILTERS: Filters = {
   sponsored: "all",
   monthFrom: null,
   monthTo: null,
+  contentTypes: [],
+  languages: [],
+  audienceLocations: [],
 };
 
 /** Does one aggregate-cell row match the current filter selection? */
@@ -19,7 +22,7 @@ function rowMatches(
   file: AggregatesFile,
   filters: Filters
 ): boolean {
-  const [platformIdx, categoryIdx, tierIdx, sponsored, monthIdx] = row;
+  const [platformIdx, categoryIdx, tierIdx, sponsored, monthIdx, contentTypeIdx, languageIdx, audienceLocationIdx] = row;
 
   if (filters.platforms.length > 0) {
     const platform = file.legend.platform[platformIdx];
@@ -39,6 +42,19 @@ function rowMatches(
   const month = file.legend.month[monthIdx];
   if (filters.monthFrom && month < filters.monthFrom) return false;
   if (filters.monthTo && month > filters.monthTo) return false;
+
+  if (filters.contentTypes.length > 0) {
+    const contentType = file.legend.content_type[contentTypeIdx];
+    if (!filters.contentTypes.includes(contentType)) return false;
+  }
+  if (filters.languages.length > 0) {
+    const language = file.legend.language[languageIdx];
+    if (!filters.languages.includes(language)) return false;
+  }
+  if (filters.audienceLocations.length > 0) {
+    const location = file.legend.audience_location[audienceLocationIdx];
+    if (!filters.audienceLocations.includes(location)) return false;
+  }
 
   return true;
 }
@@ -64,12 +80,12 @@ export function aggregate(
   for (const row of file.data) {
     if (!rowMatches(row, file, filters)) continue;
     cellCount += 1;
-    n += row[5];
-    sumViews += row[6];
-    sumLikes += row[7];
-    sumShares += row[8];
-    sumComments += row[9];
-    sumFollowers += row[10];
+    n += row[8];
+    sumViews += row[9];
+    sumLikes += row[10];
+    sumShares += row[11];
+    sumComments += row[12];
+    sumFollowers += row[13];
   }
 
   return {
@@ -81,6 +97,13 @@ export function aggregate(
     sumFollowers,
     weightedEngagementRate:
       sumViews > 0 ? (sumLikes + sumShares + sumComments) / sumViews : null,
+    // Per-metric rates -- pure arithmetic on the same sums above, no new
+    // data. views = reach, likes = casual approval, shares =
+    // virality/distribution, comments = conversation/depth. A segment can
+    // move one of these without moving the blended rate at all.
+    likeRate: sumViews > 0 ? sumLikes / sumViews : null,
+    shareRate: sumViews > 0 ? sumShares / sumViews : null,
+    commentRate: sumViews > 0 ? sumComments / sumViews : null,
     avgViewsPerPost: n > 0 ? sumViews / n : null,
     avgFollowers: n > 0 ? sumFollowers / n : null,
     cellCount,

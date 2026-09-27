@@ -16,6 +16,21 @@ import { describeSegment } from "./recommendations";
 // file. See app/api/summary/route.ts for the LLM call and env var.
 // ---------------------------------------------------------------------
 
+// Per-platform breakout of the individual metrics behind the blended rate
+// (views = reach, likes = casual approval, shares = virality/distribution,
+// comments = conversation/depth) -- reuses the same `byPlatform` array the
+// dashboard already computes via aggregateByPlatform for the breakdown
+// chart/table, so this is additive context, not a new aggregate call.
+export interface PlatformMetricStat {
+  platform: string;
+  posts: number;
+  avgViewsPerPost: number | null;
+  likeRatePct: number | null;
+  shareRatePct: number | null;
+  commentRatePct: number | null;
+  confidence: DataTier;
+}
+
 export interface ExecutiveSummaryPayload {
   segment: string;
   posts: number;
@@ -24,6 +39,7 @@ export interface ExecutiveSummaryPayload {
   liftBaselineLabel: string;
   sponsoredVsOrganicPct: number | null;
   sponsoredDataTier: DataTier;
+  platformMetrics: PlatformMetricStat[];
   recommendations: Array<{ title: string; body: string; action: string; tone: string }>;
 }
 
@@ -33,7 +49,8 @@ export function buildExecutiveSummaryPayload(
   result: AggregatedResult,
   baselineLift: LiftResult,
   sponsoredCompare: ControlledSponsoredResult,
-  recommendations: Recommendation[]
+  recommendations: Recommendation[],
+  byPlatform: Array<{ platform: string } & AggregatedResult>
 ): ExecutiveSummaryPayload {
   return {
     segment: describeSegment(filters),
@@ -50,6 +67,15 @@ export function buildExecutiveSummaryPayload(
       sponsoredCompare.medianGroupLift === null
         ? "insufficient"
         : dataTier(sponsoredCompare.minGroupN),
+    platformMetrics: byPlatform.map((row) => ({
+      platform: row.platform,
+      posts: row.n,
+      avgViewsPerPost: row.avgViewsPerPost,
+      likeRatePct: row.likeRate !== null ? row.likeRate * 100 : null,
+      shareRatePct: row.shareRate !== null ? row.shareRate * 100 : null,
+      commentRatePct: row.commentRate !== null ? row.commentRate * 100 : null,
+      confidence: dataTier(row.n),
+    })),
     recommendations: recommendations.map((r) => ({
       title: r.title,
       body: r.body,

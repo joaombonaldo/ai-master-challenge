@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -43,18 +44,59 @@ const PALETTE = {
   tooltipBorder: "rgba(17,17,20,0.16)",
 };
 
+// One metric selector drives this chart instead of always showing the
+// blended weighted engagement rate -- views/likes/shares/comments answer
+// different business questions (reach vs. casual approval vs. virality
+// vs. conversation depth) even when the blended rate looks flat across
+// platforms. See lib/aggregate-utils.ts for the underlying arithmetic.
+export type PlatformChartMetric = "blended" | "like" | "share" | "comment";
+
+export const PLATFORM_CHART_METRICS: Array<{ value: PlatformChartMetric; label: string; tooltipLabel: string }> = [
+  { value: "blended", label: "Engajamento", tooltipLabel: "TE ponderada" },
+  { value: "like", label: "Curtidas", tooltipLabel: "Taxa de curtidas" },
+  { value: "share", label: "Compart.", tooltipLabel: "Taxa de compartilhamentos" },
+  { value: "comment", label: "Comentários", tooltipLabel: "Taxa de comentários" },
+];
+
 interface PlatformChartRow {
   platform: string;
   weightedEngagementRate: number | null;
+  likeRate: number | null;
+  shareRate: number | null;
+  commentRate: number | null;
 }
 
-export default function PlatformChart({ rows }: { rows: PlatformChartRow[] }) {
-  const c = PALETTE;
+function pickRate(row: PlatformChartRow, metric: PlatformChartMetric): number | null {
+  switch (metric) {
+    case "like":
+      return row.likeRate;
+    case "share":
+      return row.shareRate;
+    case "comment":
+      return row.commentRate;
+    default:
+      return row.weightedEngagementRate;
+  }
+}
 
-  const data = rows.map((r) => ({
-    platform: r.platform,
-    ratePct: r.weightedEngagementRate ? r.weightedEngagementRate * 100 : 0,
-  }));
+export default function PlatformChart({
+  rows,
+  metric = "blended",
+}: {
+  rows: PlatformChartRow[];
+  metric?: PlatformChartMetric;
+}) {
+  const c = PALETTE;
+  const tooltipLabel =
+    PLATFORM_CHART_METRICS.find((m) => m.value === metric)?.tooltipLabel ?? "TE ponderada";
+
+  const data = rows.map((r) => {
+    const rate = pickRate(r, metric);
+    return {
+      platform: r.platform,
+      ratePct: rate ? rate * 100 : 0,
+    };
+  });
 
   if (data.length === 0) {
     return (
@@ -67,7 +109,7 @@ export default function PlatformChart({ rows }: { rows: PlatformChartRow[] }) {
   return (
     <Box sx={{ width: "100%", height: 220 }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+        <BarChart data={data} margin={{ top: 18, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.grid} />
           <XAxis
             dataKey="platform"
@@ -83,7 +125,7 @@ export default function PlatformChart({ rows }: { rows: PlatformChartRow[] }) {
             tickFormatter={(v) => `${v.toFixed(1)}%`}
           />
           <Tooltip
-            formatter={(value: number) => [`${value.toFixed(2)}%`, "TE ponderada"]}
+            formatter={(value: number) => [`${value.toFixed(2)}%`, tooltipLabel]}
             contentStyle={{
               borderRadius: 8,
               border: `1px solid ${c.tooltipBorder}`,
@@ -93,7 +135,19 @@ export default function PlatformChart({ rows }: { rows: PlatformChartRow[] }) {
             }}
             labelStyle={{ color: c.tooltipText }}
           />
-          <Bar dataKey="ratePct" radius={[4, 4, 0, 0]} maxBarSize={48} fill={c.base} />
+          <Bar dataKey="ratePct" radius={[4, 4, 0, 0]} maxBarSize={48} fill={c.base}>
+            {/* Value printed directly on each bar so the number the user is
+                looking at always matches the metric just selected -- before
+                this, only bar height changed on toggle and the actual value
+                was hidden behind a hover tooltip, which read as "nothing
+                happened" to a non-technical user. */}
+            <LabelList
+              dataKey="ratePct"
+              position="top"
+              formatter={(value: number) => `${value.toFixed(2)}%`}
+              style={{ fill: c.tickStrong, fontSize: 11, fontWeight: 600 }}
+            />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </Box>

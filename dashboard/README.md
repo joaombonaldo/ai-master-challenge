@@ -73,14 +73,18 @@ word), plain-language paragraph:
     active filter for the LLM recommendations prompt. See "Why two
     aggregate files" below.
 - Each row in the client-facing artifact is one **aggregate cell**: platform
-  x category x creator tier x sponsored flag x month, with post count and
-  summed views/likes/shares/comments/followers. There are 2,969 cells
-  covering all 52,214 source rows (~136 KB).
+  x category x creator tier x sponsored flag x month x content type x
+  language x audience location, with post count and summed
+  views/likes/shares/comments/followers. There are 44,884 cells covering
+  all 52,214 source rows (~2.0 MB raw / ~623 KB gzip -- see "content_type /
+  language / audience_location filters" below for why this grew from the
+  original 2,969-cell / ~136 KB cube).
 - Creator tier = follower-count quartiles (Small/Mid/Large/Mega), the same
   GATE-0-approved proxy used in `solution/analysis/02_segmented_analysis.py`
   and `solution/outputs/findings.json`.
 - The dashboard UI (`app/dashboard-client.tsx`) lets you filter by platform,
-  category, creator tier, sponsorship, and a month range. On every filter
+  category, creator tier, sponsorship, content type, language, audience
+  location, and a month range. On every filter
   change it recombines the matching cells client-side (`lib/aggregate-utils.ts`)
   by summing counts (sums are exact/additive for any filter combination) and
   deriving a weighted engagement rate = sum(likes+shares+comments)/sum(views).
@@ -94,17 +98,39 @@ word), plain-language paragraph:
 The LLM recommendations prompt needs format/duration/posting-time
 breakdowns computed **within the user's active filter** (e.g. "what works
 for tech" or "what works for Mega creators"), not dataset-wide. Extending
-the client-facing 5-dimension cube (platform x category x tier x sponsored x
-month, ~2,969 cells / ~136 KB) with `content_type` x `length_bucket` x
-`daypart` as three more filterable dimensions was measured on the real
-dataset and rejected: the resulting 8-dimension cube has **40,682 non-empty
-cells (~1.5 MB)** -- a >10x payload increase to every browser tab just to
-power three breakdowns only the server-side LLM prompt needs. Instead, that
-richer cube lives in `data/server_aggregates.json`, outside `public/`,
-read only by the Node API route (`export const runtime = "nodejs"`) via
-`lib/server-aggregates.ts`. The client-facing cube is untouched (actually
-~4 KB smaller after removing the old dataset-wide breakdown fields it used
-to carry for the same purpose).
+the client-facing cube with `length_bucket` x `daypart` as two more
+filterable dimensions (on top of `content_type`, already in the public cube)
+was measured on the real dataset and rejected: the resulting cube has
+**40,682+ non-empty cells (~1.5+ MB)** -- too much payload growth to power
+three breakdowns only the server-side LLM prompt needs. Instead, that
+richer cube lives in `data/server_aggregates.json` (10 dimensions: the
+public cube's 8 plus `length_bucket` x `daypart`, 51,614 cells / ~2.1 MB),
+outside `public/`, read only by the Node API route
+(`export const runtime = "nodejs"`) via `lib/server-aggregates.ts`.
+
+### `content_type` / `language` / `audience_location` filters
+
+Per `solution/outputs/dashboard_columns_profile.md`, these 3 columns are
+0% missing, low-cardinality (4/5/8 values), and independent of each other
+and of the other 5 dimensions -- engagement rate is flat across language and
+audience_location (consistent with every other axis in this project), so
+they are exposed purely as **filter/exploration controls**, never as a
+surfaced "finding." Measured cross-product cost on the real dataset:
+adding all 3 to the public cube grows it from 2,969 cells (~136 KB) to
+44,884 cells (~2.0 MB raw / ~623 KB gzip). That is bigger than the original
+ballpark, but still **well under 1 MB on the wire** once gzip/brotli
+compression (applied automatically by Next.js/Vercel to `public/` JSON) is
+accounted for -- so, unlike `length_bucket`/`daypart` above, these 3 stayed
+in the single public cube rather than requiring a server-only split: doing
+so keeps `rowMatches()`/`aggregate()` in `lib/aggregate-utils.ts` as the
+one shared filtering pipeline for the on-page KPIs, the executive summary,
+AND the LLM recommendations payload (all three call `aggregate()` /
+`aggregateByPlatform()` / `aggregateByAxis()` /
+`aggregateSponsoredCompareControlled()` on the same file), instead of
+introducing a second, parallel filtering implementation for just these 3
+fields. `data/server_aggregates.json` also carries `language` and
+`audience_location` (10 dimensions total, 51,614 cells) so the
+format/duration/daypart breakdowns sent to the LLM stay filter-aware too.
 
 ## Data privacy / token-budget rule
 

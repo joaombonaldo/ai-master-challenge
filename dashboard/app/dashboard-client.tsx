@@ -15,9 +15,11 @@ import Card from "@mui/material/Card";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
 import Button from "@mui/material/Button";
-import Select from "@mui/material/Select";
+import Select, { type SelectChangeEvent } from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import FormControl from "@mui/material/FormControl";
+import Checkbox from "@mui/material/Checkbox";
+import ListItemText from "@mui/material/ListItemText";
 import Divider from "@mui/material/Divider";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -25,7 +27,13 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
-import PlatformChart, { platformColor } from "./components/PlatformChart";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import PlatformChart, {
+  platformColor,
+  PLATFORM_CHART_METRICS,
+  type PlatformChartMetric,
+} from "./components/PlatformChart";
 import SponsoredCompare from "./components/SponsoredCompare";
 import LiftIndicator from "./components/LiftIndicator";
 import HeroCell from "./components/HeroCell";
@@ -38,10 +46,6 @@ import { buildRecommendations } from "@/lib/recommendations";
 import { buildExecutiveSummaryPayload } from "@/lib/summary";
 import { buildLlmRecommendationsPayload } from "@/lib/llm-recommendations";
 
-function toggle(list: string[], value: string): string[] {
-  return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
-}
-
 function fmtInt(n: number | null): string {
   if (n === null || Number.isNaN(n)) return "-";
   return Math.round(n).toLocaleString();
@@ -50,6 +54,31 @@ function fmtInt(n: number | null): string {
 function fmtPct(n: number | null): string {
   if (n === null || Number.isNaN(n)) return "-";
   return `${(n * 100).toFixed(2)}%`;
+}
+
+// Ties the platform breakdown table to the chart's metric toggle: the
+// column matching the currently selected metric is visually called out
+// (bold, gold-tinted background) so it's unmistakable which numbers the
+// bars above are drawing from, even though the other columns stay visible
+// as reference and don't change with the toggle.
+function metricColumnHeaderSx(active: boolean) {
+  return {
+    color: active ? "custom.goldStrong" : "text.disabled",
+    fontWeight: 600,
+    fontSize: "0.68rem",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.04em",
+    bgcolor: active ? "custom.goldSoft" : "transparent",
+  };
+}
+
+function metricColumnCellSx(active: boolean) {
+  return {
+    fontSize: "0.85rem",
+    fontWeight: active ? 700 : 400,
+    color: active ? "custom.goldStrong" : "text.primary",
+    bgcolor: active ? "custom.goldSoft" : "transparent",
+  };
 }
 
 function Panel({ children, dense }: { children: React.ReactNode; dense?: boolean }) {
@@ -101,46 +130,68 @@ const FILTER_LABEL_SX = {
   mb: "4px",
 };
 
-function FilterChips({
+// Every filter renders as an MUI Select dropdown for visual/UX consistency.
+// Multi-value filters (platform, category, tier, format, language, audience
+// location) use the standard MUI "Multiple Select" pattern: `multiple` prop,
+// a checkbox + label per MenuItem, and `renderValue` showing the current
+// selection as compact chips in the closed control -- same look everywhere,
+// only the number of selectable values differs.
+function FilterMultiSelect({
   label,
   options,
   selected,
-  onToggle,
+  onChange,
+  width,
 }: {
   label: string;
   options: string[];
   selected: string[];
-  onToggle: (value: string) => void;
+  onChange: (values: string[]) => void;
+  width?: number;
 }) {
+  const handleChange = (e: SelectChangeEvent<string[]>) => {
+    const value = e.target.value;
+    onChange(typeof value === "string" ? value.split(",") : value);
+  };
   return (
-    <Box sx={{ flexShrink: 0 }}>
+    <Box sx={{ flexShrink: 0, minWidth: width ?? 140, maxWidth: width ?? 140 }}>
       <Typography component="label" sx={FILTER_LABEL_SX}>
         {label}
       </Typography>
-      <Box sx={{ display: "flex", flexWrap: "nowrap", gap: "4px" }}>
-        {options.map((opt) => {
-          const active = selected.includes(opt);
-          return (
-            <Chip
-              key={opt}
-              label={opt}
-              size="small"
-              onClick={() => onToggle(opt)}
-              variant={active ? "filled" : "outlined"}
-              sx={{
-                height: "22px",
-                fontSize: "0.72rem",
-                fontWeight: 500,
-                borderRadius: "999px",
-                bgcolor: active ? "custom.goldSoft" : "transparent",
-                borderColor: active ? "custom.goldBorder" : "custom.borderStrong",
-                color: active ? "custom.goldStrong" : "text.secondary",
-                "&:hover": { borderColor: "custom.goldBorder", color: active ? "custom.goldStrong" : "text.primary" },
-              }}
-            />
-          );
-        })}
-      </Box>
+      <FormControl size="small" fullWidth>
+        <Select
+          multiple
+          displayEmpty
+          value={selected}
+          onChange={handleChange}
+          sx={{ height: "30px", fontSize: "0.78rem" }}
+          MenuProps={{ PaperProps: { style: { maxHeight: 320 } } }}
+          renderValue={(sel) => {
+            if (sel.length === 0) {
+              return (
+                <Typography sx={{ fontSize: "0.78rem", color: "text.disabled" }}>Todos</Typography>
+              );
+            }
+            const label = sel.length <= 1 ? sel.join(", ") : `${sel.length} selecionados`;
+            return (
+              <Box sx={{ display: "flex", overflow: "hidden" }}>
+                <Chip
+                  label={label}
+                  size="small"
+                  sx={{ height: "18px", fontSize: "0.65rem", bgcolor: "custom.goldSoft", color: "custom.goldStrong" }}
+                />
+              </Box>
+            );
+          }}
+        >
+          {options.map((opt) => (
+            <MenuItem key={opt} value={opt} dense sx={{ py: "2px" }}>
+              <Checkbox checked={selected.includes(opt)} size="small" sx={{ p: "4px" }} />
+              <ListItemText primary={opt} primaryTypographyProps={{ fontSize: "0.8rem" }} />
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
     </Box>
   );
 }
@@ -151,6 +202,7 @@ export default function DashboardClient({
   aggregates: AggregatesFile;
 }) {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [chartMetric, setChartMetric] = useState<PlatformChartMetric>("blended");
 
   const months = aggregates.legend.month;
   // Most recent month first, per leader feedback -- these lists are for
@@ -183,8 +235,8 @@ export default function DashboardClient({
   );
 
   const summaryPayload = useMemo(
-    () => buildExecutiveSummaryPayload(filters, result, baselineLift, sponsoredCompare, recommendations),
-    [filters, result, baselineLift, sponsoredCompare, recommendations]
+    () => buildExecutiveSummaryPayload(filters, result, baselineLift, sponsoredCompare, recommendations, byPlatform),
+    [filters, result, baselineLift, sponsoredCompare, recommendations, byPlatform]
   );
 
   const llmRecommendationsPayload = useMemo(
@@ -218,30 +270,59 @@ export default function DashboardClient({
     filters.tiers.length +
     (filters.sponsored !== "all" ? 1 : 0) +
     (filters.monthFrom ? 1 : 0) +
-    (filters.monthTo ? 1 : 0);
+    (filters.monthTo ? 1 : 0) +
+    filters.contentTypes.length +
+    filters.languages.length +
+    filters.audienceLocations.length;
 
   return (
     <>
-      {/* ---------- Filters: one dense utility strip, filters row + status/reset row below ---------- */}
+      {/* ---------- Filters: one dense utility strip, filters row + status/reset row below ----------
+          Wraps onto ~2 lines at normal desktop widths instead of scrolling horizontally --
+          leader feedback: 8 controls must all be visible without scrolling. flexWrap here
+          (not nowrap+overflowX) is the fix; columnGap/rowGap keep wrapped lines from looking
+          cramped or misaligned. */}
       <Panel dense>
-        <Box sx={{ display: "flex", flexWrap: "nowrap", alignItems: "flex-end", gap: "28px", overflowX: "auto", pb: "2px" }}>
-          <FilterChips
+        <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", columnGap: "20px", rowGap: "12px" }}>
+          <FilterMultiSelect
             label="Plataforma"
             options={aggregates.legend.platform}
             selected={filters.platforms}
-            onToggle={(p) => setFilters((f) => ({ ...f, platforms: toggle(f.platforms, p) }))}
+            onChange={(v) => setFilters((f) => ({ ...f, platforms: v }))}
           />
-          <FilterChips
+          <FilterMultiSelect
             label="Categoria"
             options={aggregates.legend.category}
             selected={filters.categories}
-            onToggle={(c) => setFilters((f) => ({ ...f, categories: toggle(f.categories, c) }))}
+            onChange={(v) => setFilters((f) => ({ ...f, categories: v }))}
           />
-          <FilterChips
+          <FilterMultiSelect
             label="Tier de criador"
             options={aggregates.legend.creator_tier}
             selected={filters.tiers}
-            onToggle={(t) => setFilters((f) => ({ ...f, tiers: toggle(f.tiers, t) }))}
+            onChange={(v) => setFilters((f) => ({ ...f, tiers: v }))}
+            width={130}
+          />
+          <FilterMultiSelect
+            label="Formato"
+            options={aggregates.legend.content_type}
+            selected={filters.contentTypes}
+            onChange={(v) => setFilters((f) => ({ ...f, contentTypes: v }))}
+            width={130}
+          />
+          <FilterMultiSelect
+            label="Idioma"
+            options={aggregates.legend.language}
+            selected={filters.languages}
+            onChange={(v) => setFilters((f) => ({ ...f, languages: v }))}
+            width={120}
+          />
+          <FilterMultiSelect
+            label="Localização da audiência"
+            options={aggregates.legend.audience_location}
+            selected={filters.audienceLocations}
+            onChange={(v) => setFilters((f) => ({ ...f, audienceLocations: v }))}
+            width={160}
           />
           <Box sx={{ flexShrink: 0 }}>
             <Typography component="label" sx={FILTER_LABEL_SX}>
@@ -390,15 +471,16 @@ export default function DashboardClient({
           }}
         >
           {[
-            ["Total de curtidas", fmtInt(result.sumLikes)],
-            ["Total de compartilhamentos", fmtInt(result.sumShares)],
-            ["Total de comentários", fmtInt(result.sumComments)],
-            ["Média de visualizações / post", fmtInt(result.avgViewsPerPost)],
-            ["Média de seguidores (criador)", fmtInt(result.avgFollowers)],
-          ].map(([label, value]) => (
+            ["Média de visualizações / post", fmtInt(result.avgViewsPerPost), "Alcance médio: quantas visualizações cada post costuma gerar."],
+            ["Taxa de curtidas", fmtPct(result.likeRate), "Curtidas / visualizações -- aprovação casual, o engajamento mais fácil de dar."],
+            ["Taxa de compartilhamentos", fmtPct(result.shareRate), "Compartilhamentos / visualizações -- viralidade e distribuição orgânica."],
+            ["Taxa de comentários", fmtPct(result.commentRate), "Comentários / visualizações -- profundidade de conversa gerada."],
+            ["Média de seguidores (criador)", fmtInt(result.avgFollowers), null],
+          ].map(([label, value, tip]) => (
             <Box key={label} sx={{ border: 1, borderColor: "divider", borderRadius: "10px", p: "12px 14px", textAlign: "center" }}>
               <Typography sx={{ fontSize: "0.68rem", color: "text.disabled", textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 600 }}>
                 {label}
+                {tip ? <HelpTip text={tip} /> : null}
               </Typography>
               <Typography sx={{ fontSize: "1.1rem", fontWeight: 600, mt: "5px", color: "text.secondary", letterSpacing: "-0.01em", fontVariantNumeric: "tabular-nums" }}>
                 {value}
@@ -412,10 +494,55 @@ export default function DashboardClient({
       <Panel>
         <PanelHeader
           title="Detalhamento por plataforma"
-          subtitle="Como a taxa de engajamento se compara entre plataformas agora"
+          subtitle={
+            <>
+              {PLATFORM_CHART_METRICS.find((m) => m.value === chartMetric)?.tooltipLabel} por plataforma agora
+              <HelpTip text="Visualizações = alcance. Curtidas = aprovação casual. Compartilhamentos = viralidade/distribuição. Comentários = profundidade de conversa. Uma plataforma pode ganhar em alcance sem ganhar em compartilhamentos, mesmo com a taxa de engajamento combinada igual." />
+            </>
+          }
+          action={
+            <ToggleButtonGroup
+              value={chartMetric}
+              exclusive
+              size="small"
+              onChange={(_, value) => value && setChartMetric(value)}
+              sx={{
+                "& .MuiToggleButton-root": {
+                  fontSize: "0.68rem",
+                  textTransform: "none",
+                  py: "2px",
+                  px: "10px",
+                  color: "text.secondary",
+                  borderColor: "divider",
+                  "&.Mui-selected": {
+                    bgcolor: "custom.goldSoft",
+                    color: "custom.goldStrong",
+                    borderColor: "custom.goldBorder",
+                  },
+                },
+              }}
+            >
+              {PLATFORM_CHART_METRICS.map((m) => (
+                <ToggleButton key={m.value} value={m.value}>
+                  {m.label}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+          }
         />
-        <PlatformChart rows={byPlatform} />
+        <PlatformChart rows={byPlatform} metric={chartMetric} />
         <Divider sx={{ my: "20px" }} />
+        {/* The table is a full reference (all 4 rate columns at once) and does
+            NOT filter down to the selected metric -- only the chart bars do.
+            Per leader feedback, that split was confusing ("didn't understand
+            what was happening") because nothing showed *which* column the
+            bars corresponded to. The active metric's column is now bolded
+            and tinted gold, and the chart's header already names the metric,
+            so the cause-and-effect of clicking the toggle is visible instead
+            of implicit. */}
+        <Typography sx={{ fontSize: "0.68rem", color: "text.disabled", mb: "8px" }}>
+          O gráfico acima mostra apenas a coluna destacada abaixo; as demais colunas continuam de referência.
+        </Typography>
         <TableContainer>
           <Table size="small">
             <TableHead>
@@ -423,7 +550,10 @@ export default function DashboardClient({
                 <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Plataforma</TableCell>
                 <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Posts</TableCell>
                 <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Visualizações</TableCell>
-                <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>TE ponderada</TableCell>
+                <TableCell sx={metricColumnHeaderSx(chartMetric === "blended")}>TE ponderada{chartMetric === "blended" ? " ●" : ""}</TableCell>
+                <TableCell sx={metricColumnHeaderSx(chartMetric === "like")}>Curtidas{chartMetric === "like" ? " ●" : ""}</TableCell>
+                <TableCell sx={metricColumnHeaderSx(chartMetric === "share")}>Compart.{chartMetric === "share" ? " ●" : ""}</TableCell>
+                <TableCell sx={metricColumnHeaderSx(chartMetric === "comment")}>Coment.{chartMetric === "comment" ? " ●" : ""}</TableCell>
                 <TableCell sx={{ color: "text.disabled", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Média visual./post</TableCell>
               </TableRow>
             </TableHead>
@@ -436,7 +566,10 @@ export default function DashboardClient({
                   </TableCell>
                   <TableCell sx={{ fontSize: "0.85rem" }}>{fmtInt(row.n)}</TableCell>
                   <TableCell sx={{ fontSize: "0.85rem" }}>{fmtInt(row.sumViews)}</TableCell>
-                  <TableCell sx={{ fontSize: "0.85rem" }}>{fmtPct(row.weightedEngagementRate)}</TableCell>
+                  <TableCell sx={metricColumnCellSx(chartMetric === "blended")}>{fmtPct(row.weightedEngagementRate)}</TableCell>
+                  <TableCell sx={metricColumnCellSx(chartMetric === "like")}>{fmtPct(row.likeRate)}</TableCell>
+                  <TableCell sx={metricColumnCellSx(chartMetric === "share")}>{fmtPct(row.shareRate)}</TableCell>
+                  <TableCell sx={metricColumnCellSx(chartMetric === "comment")}>{fmtPct(row.commentRate)}</TableCell>
                   <TableCell sx={{ fontSize: "0.85rem" }}>{fmtInt(row.avgViewsPerPost)}</TableCell>
                 </TableRow>
               ))}

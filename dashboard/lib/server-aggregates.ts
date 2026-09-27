@@ -49,7 +49,7 @@ function rowMatchesFilters(
   file: ServerAggregatesFile,
   filters: Filters
 ): boolean {
-  const [platformIdx, categoryIdx, tierIdx, sponsored, monthIdx] = row;
+  const [platformIdx, categoryIdx, tierIdx, sponsored, monthIdx, contentTypeIdx, , , languageIdx, audienceLocationIdx] = row;
 
   if (filters.platforms.length > 0) {
     const platform = file.legend.platform[platformIdx];
@@ -70,6 +70,19 @@ function rowMatchesFilters(
   if (filters.monthFrom && month < filters.monthFrom) return false;
   if (filters.monthTo && month > filters.monthTo) return false;
 
+  if (filters.contentTypes.length > 0) {
+    const contentType = file.legend.content_type[contentTypeIdx];
+    if (!filters.contentTypes.includes(contentType)) return false;
+  }
+  if (filters.languages.length > 0) {
+    const language = file.legend.language[languageIdx];
+    if (!filters.languages.includes(language)) return false;
+  }
+  if (filters.audienceLocations.length > 0) {
+    const location = file.legend.audience_location[audienceLocationIdx];
+    if (!filters.audienceLocations.includes(location)) return false;
+  }
+
   return true;
 }
 
@@ -86,11 +99,11 @@ function emptySums(): Sums {
 }
 
 function addRow(sums: Sums, row: ServerAggregateRow): void {
-  sums.n += row[8];
-  sums.sumViews += row[9];
-  sums.sumLikes += row[10];
-  sums.sumShares += row[11];
-  sums.sumComments += row[12];
+  sums.n += row[10];
+  sums.sumViews += row[11];
+  sums.sumLikes += row[12];
+  sums.sumShares += row[13];
+  sums.sumComments += row[14];
 }
 
 function toSegmentStat(value: string, sums: Sums): SegmentStat {

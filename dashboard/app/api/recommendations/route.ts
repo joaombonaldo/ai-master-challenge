@@ -90,7 +90,10 @@ function isValidFilters(f: unknown): f is Filters {
     Array.isArray(filters.tiers) &&
     typeof filters.sponsored === "string" &&
     (filters.monthFrom === null || typeof filters.monthFrom === "string") &&
-    (filters.monthTo === null || typeof filters.monthTo === "string")
+    (filters.monthTo === null || typeof filters.monthTo === "string") &&
+    Array.isArray(filters.contentTypes) &&
+    Array.isArray(filters.languages) &&
+    Array.isArray(filters.audienceLocations)
   );
 }
 
@@ -104,6 +107,7 @@ function isValidPayload(body: unknown): body is LlmRecommendationsPayload {
     Array.isArray(p.platformBreakdown) &&
     Array.isArray(p.categoryBreakdown) &&
     Array.isArray(p.tierBreakdown) &&
+    Array.isArray(p.platformMetricBreakdown) &&
     typeof p.sponsoredComparison === "object" &&
     p.sponsoredComparison !== null &&
     Array.isArray(p.fallbackRecommendations)
@@ -245,6 +249,21 @@ function buildPrompt(
     nota_geral:
       "Os eixos abaixo (plataforma, categoria, tier, formato, duracao, horario) estao TODOS calculados DENTRO do filtro atual do dashboard (nao apenas o valor selecionado, mas tambem nao a base inteira do dataset) -- cada eixo mostra todos os valores, do melhor para o pior, restritos ao segmento que o usuario filtrou agora. Se o filtro atual for estreito, alguns desses eixos podem ter poucos posts ou nenhum dado para certos valores -- isso e esperado e reflete o proprio filtro, nao um erro. Para cada eixo, 'maior_diferenca_pp_ja_calculada' e 'eixo_tem_diferenca_material' JA FORAM CALCULADOS EM CODIGO (nao pelo modelo) -- USE ESSES CAMPOS DIRETAMENTE para decidir se o eixo e material, NAO subtraia as taxas de engajamento voce mesmo (comparar percentuais de cabeca gera erro).",
     ranking_por_plataforma: axisFact("plataforma", payload.platformBreakdown),
+    metricas_individuais_por_plataforma_informativo_apenas: {
+      explicacao:
+        "Estas sao as metricas INDIVIDUAIS por tras da taxa de engajamento combinada (que soma curtidas+compartilhamentos+comentarios / visualizacoes): visualizacoes_medias_por_post = alcance; taxa_curtidas_pct = aprovacao casual (curtidas/visualizacoes); taxa_compartilhamentos_pct = viralidade/distribuicao (compartilhamentos/visualizacoes); taxa_comentarios_pct = profundidade de conversa (comentarios/visualizacoes). Uma plataforma pode ter mais alcance ou mais compartilhamentos sem isso aparecer na taxa combinada, que e o que este bloco existe para revelar.",
+      aviso_importante:
+        "ESTE BLOCO NAO TEM 'eixo_tem_diferenca_material' calculado (ao contrario do ranking_por_plataforma acima) -- e contexto informativo, nao um eixo pronto para virar recomendacao de alta confianca. So mencione algo daqui se a diferenca entre plataformas for GRANDE e OBVIA (ex.: uma plataforma com o dobro da taxa de compartilhamento de outra, ambas com confiabilidade_dado 'full'). Se mencionar, a recomendacao deve ser tipo 'testar' com confianca 'baixa' ou 'media', nunca 'alta' baseada só nisso, e nunca dispare um 'parar' baseado só nisso. Se nada aqui for obviamente grande, ignore este bloco -- não force uma observação.",
+      itens: payload.platformMetricBreakdown.map((p) => ({
+        plataforma: p.platform,
+        posts: p.posts,
+        visualizacoes_medias_por_post: p.avgViewsPerPost,
+        taxa_curtidas_pct: p.likeRatePct,
+        taxa_compartilhamentos_pct: p.shareRatePct,
+        taxa_comentarios_pct: p.commentRatePct,
+        confiabilidade_dado: p.confidence,
+      })),
+    },
     ranking_por_categoria: axisFact("categoria", payload.categoryBreakdown),
     ranking_por_tier_de_criador: axisFact("tier de criador", payload.tierBreakdown),
     ranking_por_formato_dentro_do_filtro_atual: axisFact("formato (dentro do filtro atual)", formatBreakdown),
@@ -284,6 +303,8 @@ function buildPrompt(
     "Tom: direto e escaneável (frases curtas, sem rodeios), no espírito de um memorando executivo: sempre O QUÊ fazer, PARA QUEM/QUAL SEGMENTO (plataforma + categoria + tier de criador + formato/horário quando fizer diferença), QUANDO, e qual EVIDÊNCIA (número real, em linguagem simples) sustenta isso. Cada recomendação deve poder ser lida em poucos segundos, mas não pode ser vaga.",
     "",
     "COMO PRIORIZAR (obrigatório): olhe o campo 'eixo_tem_diferenca_material' de CADA eixo (já calculado em código, ver nota_geral) antes de escrever qualquer coisa. Só eixos com 'eixo_tem_diferenca_material': true são candidatos a virar uma recomendação de 'oportunidade' ou 'parar' com confiança alta. Entre os eixos materiais, priorize pelo tamanho de 'maior_diferenca_pp_ja_calculada' (ou 'diferenca_patrocinado_pct_ja_calculada' para patrocínio) -- o maior primeiro. Não se prenda só à plataforma -- categoria, tier, formato, duração e horário competem pelo mesmo espaço de atenção do gerente. Numere as recomendações por prioridade (1 = mais impactante).",
+    "",
+    "MÉTRICAS INDIVIDUAIS (opcional, ver 'metricas_individuais_por_plataforma_informativo_apenas'): a taxa de engajamento combinada pode estar parecida entre plataformas mesmo quando alcance, curtidas, compartilhamentos e comentários individualmente NÃO estão -- por exemplo, uma plataforma pode gerar bem mais compartilhamentos (viralidade) sem isso aparecer na taxa combinada. Se você notar uma diferença GRANDE e ÓBVIA em uma dessas métricas individuais entre plataformas com dado 'full', pode incluir isso como UMA recomendação extra tipo 'testar', descrevendo a métrica certa (alcance/curtidas/compartilhamentos/comentários) e por que importa para a decisão de marca (alcance/reconhecimento) vs. viralidade. Siga o 'aviso_importante' desse bloco à risca -- é informativo, sem eixo_tem_diferenca_material calculado, então nunca vira 'alta' confiança nem 'parar' sozinho. Se não houver nada óbvio ali, não force -- ignore o bloco.",
     "",
     "REGRA MAIS IMPORTANTE: você só pode usar os números abaixo. Não invente estatísticas, benchmarks, percentuais ou afirmações que não estejam nos dados fornecidos. Se não houver um número para sustentar uma ideia, não a inclua. NÃO subtraia duas taxas de engajamento de cabeça para decidir se a diferença é grande -- use sempre 'maior_diferenca_pp_ja_calculada'/'eixo_tem_diferenca_material', que já vêm calculados.",
     "",

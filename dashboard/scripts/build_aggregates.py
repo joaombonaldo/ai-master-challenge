@@ -4,8 +4,17 @@ for the dashboard from the raw dataset.
 
 Rules (binding, same as solution/analysis/*):
   - Raw rows never ship to the browser. Only pre-aggregated sums/counts per
-    (platform x category x creator_tier x sponsored x month) cell are written
-    to dashboard/public/data/aggregates.json.
+    (platform x category x creator_tier x sponsored x month x content_type x
+    language x audience_location) cell are written to
+    dashboard/public/data/aggregates.json. content_type/language/
+    audience_location were added per solution/outputs/dashboard_columns_profile.md
+    (0% missing, low cardinality: 4/5/8 values, independent of each other).
+    Measured: 44,884 non-empty cells (~2.0 MB raw / ~622 KB gzip), up from
+    2,969 cells (~140 KB) for the original 5-dimension cube -- bigger than
+    the original ballpark, but still well under 1 MB once gzip/brotli
+    compression (applied automatically by Next.js/Vercel to public/ JSON) is
+    accounted for, and still strictly aggregated sums/counts (no post ids,
+    no raw per-post fields), never individual rows.
   - creator_tier = follower_count quartiles (Small/Mid/Large/Mega), same
     method GATE-0-approved and used in solution/analysis/02_segmented_analysis.py.
   - Cells store SUMS (views/likes/shares/comments/followers) + n, not medians,
@@ -82,15 +91,30 @@ def build():
     categories = sorted(df["content_category"].unique().tolist())
     tiers = ["Small", "Mid", "Large", "Mega"]
     months = sorted(df["month"].dropna().unique().tolist())
+    content_types = sorted(df["content_type"].dropna().unique().tolist())
+    languages = sorted(df["language"].dropna().unique().tolist())
+    audience_locations = sorted(df["audience_location"].dropna().unique().tolist())
 
     p_idx = {v: i for i, v in enumerate(platforms)}
     c_idx = {v: i for i, v in enumerate(categories)}
     t_idx = {v: i for i, v in enumerate(tiers)}
     m_idx = {v: i for i, v in enumerate(months)}
+    ct_idx = {v: i for i, v in enumerate(content_types)}
+    lang_idx = {v: i for i, v in enumerate(languages)}
+    loc_idx = {v: i for i, v in enumerate(audience_locations)}
 
     grouped = (
         df.groupby(
-            ["platform", "content_category", "creator_tier", "is_sponsored", "month"],
+            [
+                "platform",
+                "content_category",
+                "creator_tier",
+                "is_sponsored",
+                "month",
+                "content_type",
+                "language",
+                "audience_location",
+            ],
             observed=True,
         )
         .agg(
@@ -115,6 +139,9 @@ def build():
                 t_idx[r.creator_tier],
                 1 if r.is_sponsored else 0,
                 m_idx[r.month],
+                ct_idx[r.content_type],
+                lang_idx[r.language],
+                loc_idx[r.audience_location],
                 int(r.n),
                 int(r.sum_views),
                 int(r.sum_likes),
@@ -141,6 +168,9 @@ def build():
             "creator_tier": tiers,
             "sponsored": ["organic", "sponsored"],
             "month": months,
+            "content_type": content_types,
+            "language": languages,
+            "audience_location": audience_locations,
         },
         "columns": [
             "platform_idx",
@@ -148,6 +178,9 @@ def build():
             "creator_tier_idx",
             "sponsored",
             "month_idx",
+            "content_type_idx",
+            "language_idx",
+            "audience_location_idx",
             "n",
             "sum_views",
             "sum_likes",
@@ -164,11 +197,14 @@ def build():
         # (no references to internal project docs or process artifacts).
         "methodology_note": (
             "Each row is one aggregate cell (platform x category x creator tier x "
-            "sponsored flag x month), never an individual post. creator_tier is "
-            "based on follower-count quartiles (Small/Mid/Large/Mega). Engagement "
-            "rate shown in the dashboard is a weighted average -- sum(likes+shares"
-            "+comments)/sum(views) across whatever cells match the active filters "
-            "-- not a prediction."
+            "sponsored flag x month x content_type x language x audience_location), "
+            "never an individual post. creator_tier is based on follower-count "
+            "quartiles (Small/Mid/Large/Mega). Engagement rate shown in the "
+            "dashboard is a weighted average -- sum(likes+shares+comments)/"
+            "sum(views) across whatever cells match the active filters -- not a "
+            "prediction. content_type/language/audience_location are exposed as "
+            "filters only (no engagement differentiation across them worth "
+            "surfacing as a finding -- see dashboard_columns_profile.md)."
         ),
         "data": rows,
     }
@@ -199,14 +235,24 @@ def build():
 # runtime) via lib/server-aggregates.ts, which re-aggregates it on demand
 # for whatever filter the user currently has active. Raw rows still never
 # leave this build step or the server process -- only aggregate sums.
+#
+# language / audience_location were added as 2 more dimensions (10 total)
+# so this cube's breakdowns also respect those 2 new dashboard filters (not
+# just content_type, already present here). Measured: 51,614 non-empty
+# cells (~2 MB) -- server-only, so this size is not a browser-payload
+# concern.
 # ---------------------------------------------------------------------
 def build_server_aggregates(df, p_idx, c_idx, t_idx, m_idx, platforms, categories, tiers, months):
     content_types = sorted(df["content_type"].dropna().unique().tolist())
     length_buckets = ["Q1 (mais curto)", "Q2", "Q3", "Q4 (mais longo)"]
     dayparts = ["morning", "afternoon", "evening", "night"]
+    languages = sorted(df["language"].dropna().unique().tolist())
+    audience_locations = sorted(df["audience_location"].dropna().unique().tolist())
     ct_idx = {v: i for i, v in enumerate(content_types)}
     lb_idx = {v: i for i, v in enumerate(length_buckets)}
     dp_idx = {v: i for i, v in enumerate(dayparts)}
+    lang_idx = {v: i for i, v in enumerate(languages)}
+    loc_idx = {v: i for i, v in enumerate(audience_locations)}
 
     cols = [
         "platform",
@@ -217,6 +263,8 @@ def build_server_aggregates(df, p_idx, c_idx, t_idx, m_idx, platforms, categorie
         "content_type",
         "length_bucket",
         "daypart",
+        "language",
+        "audience_location",
     ]
     grouped = (
         df.groupby(cols, observed=True)
@@ -244,6 +292,8 @@ def build_server_aggregates(df, p_idx, c_idx, t_idx, m_idx, platforms, categorie
                 ct_idx[r.content_type],
                 lb_idx[r.length_bucket],
                 dp_idx[r.daypart],
+                lang_idx[r.language],
+                loc_idx[r.audience_location],
                 int(r.n),
                 int(r.sum_views),
                 int(r.sum_likes),
@@ -271,6 +321,8 @@ def build_server_aggregates(df, p_idx, c_idx, t_idx, m_idx, platforms, categorie
             "content_type": content_types,
             "length_bucket": length_buckets,
             "daypart": dayparts,
+            "language": languages,
+            "audience_location": audience_locations,
         },
         "columns": [
             "platform_idx",
@@ -281,6 +333,8 @@ def build_server_aggregates(df, p_idx, c_idx, t_idx, m_idx, platforms, categorie
             "content_type_idx",
             "length_bucket_idx",
             "daypart_idx",
+            "language_idx",
+            "audience_location_idx",
             "n",
             "sum_views",
             "sum_likes",

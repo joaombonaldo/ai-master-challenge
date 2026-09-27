@@ -66,6 +66,15 @@ export function describeSegment(filters: Filters): string {
   if (filters.sponsored !== "all") {
     parts.push(filters.sponsored === "sponsored" ? "somente posts patrocinados" : "somente posts orgânicos");
   }
+  if (filters.contentTypes.length > 0) {
+    parts.push(`formato ${filters.contentTypes.join("/")}`);
+  }
+  if (filters.languages.length > 0) {
+    parts.push(`idioma ${filters.languages.join("/")}`);
+  }
+  if (filters.audienceLocations.length > 0) {
+    parts.push(`audiência em ${filters.audienceLocations.join("/")}`);
+  }
   return parts.join(", ");
 }
 

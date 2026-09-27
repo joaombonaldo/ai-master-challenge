@@ -54,6 +54,23 @@ export interface SegmentStat {
   confidence: DataTier;
 }
 
+// Per-metric breakout, platform level only (per leader spec) -- views =
+// reach, likes = casual approval, shares = virality/distribution,
+// comments = conversation/depth. Additive context only: these do NOT have
+// a materiality floor computed (unlike weightedEngagementRatePct via
+// axisSpread in the API route), so the prompt explicitly tells the model
+// to treat them as informational, not as inputs to the existing
+// eixo_tem_diferenca_material / confidence-tier logic.
+export interface PlatformMetricStat {
+  platform: string;
+  posts: number;
+  avgViewsPerPost: number | null;
+  likeRatePct: number | null;
+  shareRatePct: number | null;
+  commentRatePct: number | null;
+  confidence: DataTier;
+}
+
 export interface LlmRecommendationsPayload {
   segment: string;
   posts: number;
@@ -65,6 +82,8 @@ export interface LlmRecommendationsPayload {
   platformBreakdown: SegmentStat[];
   categoryBreakdown: SegmentStat[];
   tierBreakdown: SegmentStat[];
+  // Platform-level only, per leader spec -- see PlatformMetricStat doc.
+  platformMetricBreakdown: PlatformMetricStat[];
   sponsoredComparison: {
     medianGroupLiftPct: number | null; // (ratio - 1) * 100
     confidence: DataTier;
@@ -104,6 +123,15 @@ export function buildLlmRecommendationsPayload(
     platformBreakdown: byPlatform.map((row) => toSegmentStat(row.platform, row)),
     categoryBreakdown: byCategory.map((row) => toSegmentStat(row.value, row)),
     tierBreakdown: byTier.map((row) => toSegmentStat(row.value, row)),
+    platformMetricBreakdown: byPlatform.map((row) => ({
+      platform: row.platform,
+      posts: row.n,
+      avgViewsPerPost: row.avgViewsPerPost,
+      likeRatePct: row.likeRate !== null ? row.likeRate * 100 : null,
+      shareRatePct: row.shareRate !== null ? row.shareRate * 100 : null,
+      commentRatePct: row.commentRate !== null ? row.commentRate * 100 : null,
+      confidence: dataTier(row.n),
+    })),
     sponsoredComparison: {
       medianGroupLiftPct:
         sponsoredCompare.medianGroupLift !== null ? (sponsoredCompare.medianGroupLift - 1) * 100 : null,
