@@ -4,12 +4,16 @@ Reads data/raw/social_media_dataset.csv, computes profiling stats used in
 solution/outputs/data_profile.md. Prints aggregates only (no raw rows beyond
 the 5-row head used for column sanity-check).
 """
+import os
+
 import numpy as np
 import pandas as pd
 
 np.random.seed(42)
 
-RAW_PATH = "data/raw/social_media_dataset.csv"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", ".."))
+RAW_PATH = os.path.join(REPO_ROOT, "data", "raw", "social_media_dataset.csv")
 
 
 def main():

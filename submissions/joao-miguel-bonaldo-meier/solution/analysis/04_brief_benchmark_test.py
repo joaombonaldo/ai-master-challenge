@@ -31,8 +31,11 @@ import pandas as pd
 
 np.random.seed(42)
 
-RAW_PATH = "data/raw/social_media_dataset.csv"
-FINDINGS_PATH = "solution/outputs/findings.json"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", ".."))
+SUBMISSION_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
+RAW_PATH = os.path.join(REPO_ROOT, "data", "raw", "social_media_dataset.csv")
+FINDINGS_PATH = os.path.join(SUBMISSION_ROOT, "solution", "outputs", "findings.json")
 MIN_N = 30
 
 

@@ -40,7 +40,7 @@ import numpy as np
 import pandas as pd
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", ".."))
 RAW_PATH = os.path.join(REPO_ROOT, "data", "raw", "social_media_dataset.csv")
 OUT_PATH = os.path.join(SCRIPT_DIR, "..", "public", "data", "aggregates.json")
 # Server-only companion artifact -- see the big comment above
