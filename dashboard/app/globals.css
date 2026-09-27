@@ -829,6 +829,90 @@ td.platform-cell {
   border: none;
 }
 
+/* ---------- Recommendations (rule-based, Phase 3c) ---------- */
+
+.rec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rec-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+}
+
+.rec-card.rec-positive {
+  border-color: var(--gold-border);
+  background: var(--gold-soft);
+}
+
+.rec-card-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.rec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--series-b);
+}
+
+.rec-dot-positive {
+  background: var(--gold);
+}
+
+.rec-dot-negative {
+  background: #b0524a;
+}
+
+.rec-dot-insufficient {
+  background: var(--text-faint);
+}
+
+.rec-title {
+  font-family: var(--font-serif);
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.rec-body {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 10px 0 0;
+}
+
+.rec-action {
+  font-size: 0.82rem;
+  color: var(--text);
+  line-height: 1.6;
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.rec-action-label {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gold-strong);
+  margin-bottom: 4px;
+}
+
+.rec-action-muted {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
 /* ---------- Inline help tooltip ---------- */
 /* Small "?" icon with a native title tooltip, used to fold one short
    explanation next to a label (e.g. what "lift" means) instead of a

@@ -1,4 +1,4 @@
-# Social Media Engagement Dashboard (Phase 3a+3b — data layer, filters, lift indicator, fair sponsorship comparison)
+# Social Media Engagement Dashboard (Phase 3a+3b+3c — data layer, filters, lift indicator, fair sponsorship comparison, rule-based recommendations)
 
 Next.js (TypeScript, App Router) dashboard over **pre-aggregated** post data.
 Phase 3a built the data layer + filterable skeleton (KPI cards, a per-platform
@@ -16,8 +16,30 @@ from the same aggregate cells -- no new aggregation logic, no model, no LLM:
   ratios is reported -- the same "60 matched groups" logic as F11 in
   `findings.json`, not a raw pooled number.
 
-Rule-based recommendations and the LLM executive summary are still pending —
-those are sub-phases 3c-3e (see `process-log/DECISIONS.md`, ~19:55 entry).
+Phase 3c adds a third tab, **Recommendations**, that reacts live to the
+current filter selection with plain-language, rule-based comparisons -- no
+model, no LLM, no new data pipeline, just more arithmetic on the same
+aggregate cells (`lib/recommendations.ts`):
+
+- **Category / creator-tier focus**: when exactly one category (or tier) is
+  selected, compares it against every sibling value on that axis (holding
+  the rest of the current filters fixed) and reports whichever alternative
+  is meaningfully better or worse (>=5% relative), or says plainly that
+  there's no meaningful gap. If more or fewer than one value is selected on
+  that axis, it says so and asks the user to narrow the filter instead of
+  guessing.
+- **Sponsorship verdict**: reuses `aggregateSponsoredCompareControlled`
+  (the same fair, matched-group sponsored-vs-organic logic as the
+  "Sponsored vs. organic" tab) and turns the median lift into a plain
+  "pays off here / doesn't / no difference" verdict for the current
+  segment.
+- Every recommendation is gated by the same `dataTier` confidence floor
+  used elsewhere in the app: below 10 matched posts on either side of a
+  comparison, no verdict is shown -- an honest "not enough data" message
+  and a suggested next step (widen filters) is shown instead.
+
+The LLM executive summary is still pending — that's sub-phase 3d (see
+`process-log/DECISIONS.md`, ~19:55 entry).
 
 ## What it does
 
@@ -36,8 +58,8 @@ those are sub-phases 3c-3e (see `process-log/DECISIONS.md`, ~19:55 entry).
   change it recombines the matching cells client-side (`lib/aggregate-utils.ts`)
   by summing counts (sums are exact/additive for any filter combination) and
   deriving a weighted engagement rate = sum(likes+shares+comments)/sum(views).
-- No LLM calls, no ML model, no recommendations in this phase — verified
-  zero-cost runtime.
+- No LLM calls, no ML model — the Recommendations tab (Phase 3c) is pure
+  rule-based arithmetic on the same aggregate cells, zero runtime cost.
 
 ## Data privacy / token-budget rule
 
@@ -167,3 +189,18 @@ Phase 3b checks:
 - Narrow the filters until fewer than 10 matched groups remain (e.g. pick one
   platform + one category + one tier) — the sponsored tab should show the
   "not enough matched groups" message instead of a fabricated number.
+
+Phase 3c checks:
+- Open the "Recommendations" tab with no filters active: the category and
+  tier cards should ask you to select exactly one value (there's no single
+  segment to compare against siblings yet); the sponsorship card should show
+  a verdict (global data clears the confidence floor).
+- Select exactly one category (e.g. Tech): the category card should now
+  compare Tech against the other categories and either name a better/worse
+  alternative with a percentage, or say there's no meaningful gap — never a
+  generic tip.
+- Narrow filters to a single platform + category + tier (a small slice):
+  cards should show the "not enough data" message rather than a number once
+  the underlying `n` drops below the confidence floor.
+- `grep -RniE "findings\.json|process-log|F[0-9]{2}\b" lib/recommendations.ts app/components/RecommendationsPanel.tsx`
+  should return nothing (no internal artifact names in UI-facing code).

@@ -17,6 +17,8 @@ import DataConfidenceDot, {
   INSUFFICIENT_DATA_MESSAGE,
 } from "./components/DataConfidenceDot";
 import HelpTip from "./components/HelpTip";
+import RecommendationsPanel from "./components/RecommendationsPanel";
+import { buildRecommendations } from "@/lib/recommendations";
 
 function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -32,7 +34,7 @@ function fmtPct(n: number | null): string {
   return `${(n * 100).toFixed(2)}%`;
 }
 
-type Tab = "platform" | "sponsored";
+type Tab = "platform" | "sponsored" | "recommendations";
 
 export default function DashboardClient({
   aggregates,
@@ -63,6 +65,11 @@ export default function DashboardClient({
 
   const baselineLift = useMemo(
     () => computeLiftVsBaseline(aggregates, filters),
+    [aggregates, filters]
+  );
+
+  const recommendations = useMemo(
+    () => buildRecommendations(aggregates, filters),
     [aggregates, filters]
   );
 
@@ -305,6 +312,12 @@ export default function DashboardClient({
           >
             Sponsored vs. organic
           </button>
+          <button
+            className={`tab-btn ${tab === "recommendations" ? "active" : ""}`}
+            onClick={() => setTab("recommendations")}
+          >
+            Recommendations
+          </button>
         </div>
 
         {tab === "platform" && (
@@ -359,6 +372,16 @@ export default function DashboardClient({
               groupCount={sponsoredCompare.groupCount}
               minGroupN={sponsoredCompare.minGroupN}
             />
+          </div>
+        )}
+
+        {tab === "recommendations" && (
+          <div>
+            <p className="panel-subtitle" style={{ marginBottom: 16 }}>
+              Rule-based comparisons for the current filter selection -- not a prediction, just
+              plain arithmetic over the segments above
+            </p>
+            <RecommendationsPanel recommendations={recommendations} />
           </div>
         )}
       </section>
