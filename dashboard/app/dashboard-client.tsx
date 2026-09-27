@@ -18,7 +18,9 @@ import DataConfidenceDot, {
 } from "./components/DataConfidenceDot";
 import HelpTip from "./components/HelpTip";
 import RecommendationsPanel from "./components/RecommendationsPanel";
+import ExecutiveSummary from "./components/ExecutiveSummary";
 import { buildRecommendations } from "@/lib/recommendations";
+import { buildExecutiveSummaryPayload } from "@/lib/summary";
 
 function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -71,6 +73,11 @@ export default function DashboardClient({
   const recommendations = useMemo(
     () => buildRecommendations(aggregates, filters),
     [aggregates, filters]
+  );
+
+  const summaryPayload = useMemo(
+    () => buildExecutiveSummaryPayload(filters, result, baselineLift, sponsoredCompare, recommendations),
+    [filters, result, baselineLift, sponsoredCompare, recommendations]
   );
 
   const activeFilterCount =
@@ -295,6 +302,11 @@ export default function DashboardClient({
           </div>
         </div>
 
+      </section>
+
+      {/* ---------- Executive summary (Phase 3d): optional LLM-assisted recap ---------- */}
+      <section className="panel">
+        <ExecutiveSummary payload={summaryPayload} key={JSON.stringify(filters)} />
       </section>
 
       {/* ---------- Secondary detail: tabs instead of stacked panels ---------- */}

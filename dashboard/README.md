@@ -1,4 +1,4 @@
-# Social Media Engagement Dashboard (Phase 3a+3b+3c — data layer, filters, lift indicator, fair sponsorship comparison, rule-based recommendations)
+# Social Media Engagement Dashboard (Phase 3a-3d — data layer, filters, lift indicator, fair sponsorship comparison, rule-based recommendations, LLM executive summary)
 
 Next.js (TypeScript, App Router) dashboard over **pre-aggregated** post data.
 Phase 3a built the data layer + filterable skeleton (KPI cards, a per-platform
@@ -38,8 +38,27 @@ aggregate cells (`lib/recommendations.ts`):
   comparison, no verdict is shown -- an honest "not enough data" message
   and a suggested next step (widen filters) is shown instead.
 
-The LLM executive summary is still pending — that's sub-phase 3d (see
-`process-log/DECISIONS.md`, ~19:55 entry).
+Phase 3d adds a **"Generate executive summary"** button (below the KPI
+hero row) that turns the current filter selection into a short (~100-150
+word), plain-language paragraph:
+
+- The client sends only the small aggregate payload already rendered on
+  screen (segment description, posts, weighted engagement rate, lift vs.
+  baseline, the fair sponsored-vs-organic number and its confidence tier,
+  and the current rule-based recommendations) to a serverless API route,
+  `app/api/summary/route.ts` -- never raw rows, never the full
+  `aggregates.json`.
+- That route calls **Groq's free tier** (`llama-3.1-8b-instant`) if a
+  `GROQ_API_KEY` env var is configured, and returns the model's text.
+- If no key is configured (e.g. local dev with no `.env.local`) **or** the
+  live call fails for any reason (timeout, rate limit, network error), the
+  route falls back to a **templated, non-LLM summary** built by plain
+  string interpolation over the same numbers (`lib/summary.ts`,
+  `buildTemplatedSummary`) -- the button never shows a broken/error state,
+  it just says which mode produced the text.
+- The API key is read server-side only (`process.env.GROQ_API_KEY` inside
+  the route handler) and is never sent to, or bundled into, the browser --
+  see "Known gaps" below for how this was verified.
 
 ## What it does
 
@@ -84,7 +103,13 @@ python3 scripts/build_aggregates.py
 # 2. Install JS dependencies.
 npm install
 
-# 3. Run the dev server.
+# 3. (Optional) enable the LLM-generated executive summary -- see below.
+#    Without this step the dashboard works exactly the same, the summary
+#    button just returns a templated (non-AI) paragraph instead.
+cp .env.example .env.local
+# edit .env.local and paste a free Groq API key into GROQ_API_KEY
+
+# 4. Run the dev server.
 npm run dev
 # open http://localhost:3000
 
@@ -92,6 +117,28 @@ npm run dev
 npm run build
 npm run start
 ```
+
+### Optional: enabling the AI-generated executive summary
+
+The "Generate executive summary" button works out of the box with **zero
+configuration** (it uses a templated fallback). To have it call a real LLM
+instead:
+
+1. Create a free account at https://console.groq.com (no credit card
+   required) and generate an API key at https://console.groq.com/keys.
+2. Copy `.env.example` to `.env.local` and set `GROQ_API_KEY=<your key>`.
+3. Restart `npm run dev` / redeploy. `.env.local` is git-ignored -- never
+   commit a real key.
+4. On Vercel: Project Settings -> Environment Variables -> add
+   `GROQ_API_KEY` (Production + Preview) -- do not add it to any client
+   (`NEXT_PUBLIC_*`) variable.
+
+**Known limitation:** this MVP intentionally uses a free-tier model
+(Groq's `llama-3.1-8b-instant`) so the tool has zero marginal cost and no
+paid dependency to run the evaluation. A paid model (e.g. Claude or GPT)
+would produce more fluent, nuanced summaries and is the planned upgrade
+path once the tool is validated -- see `process-log/DECISIONS.md`
+(~19:55 entry) for the leader's explicit call to defer this.
 
 `npm run build` produces a fully static export of the one page (confirmed:
 `○ (Static) prerendered as static content`), so there is no server-side
@@ -105,7 +152,9 @@ runtime dependency beyond serving static files.
    subdirectory).
 3. Framework preset: Next.js (auto-detected). Build command
    `npm run build`, output handled automatically by the Next.js Vercel
-   integration. No environment variables are required for this phase.
+   integration. No environment variables are required to run the app --
+   the only optional one is `GROQ_API_KEY` (Phase 3d, see above), and the
+   app works fully without it.
 4. `public/data/aggregates.json` is checked into git, so Vercel builds
    deterministically without needing access to `data/raw/` at all.
 5. If the raw dataset changes later, re-run
@@ -151,6 +200,17 @@ runtime dependency beyond serving static files.
   to count it (a lower floor than `findings.json`'s n>=30, since the
   dashboard slices further by user-chosen filters); if a filter combination
   leaves too few matched groups, the UI says so instead of showing a number.
+- Phase 3d's LLM call could only be tested in this environment in
+  **templated fallback mode** (no real `GROQ_API_KEY` was configured here)
+  -- verified: `POST /api/summary` with no env var set returns
+  `{"text": ..., "source": "template"}` with a 200, and the home page
+  still builds/serves normally. Testing the live Groq path end-to-end
+  requires a real free API key, which whoever deploys this should supply
+  (see "Optional: enabling the AI-generated executive summary" above).
+- Verified the API key never reaches the browser: `grep -r "GROQ_API_KEY"
+  .next/static` after `npm run build` returns no matches, and the route
+  handler (`app/api/summary/route.ts`) is compiled as a server-only
+  function (`ƒ /api/summary`, not `○ (Static)`) while `/` remains static.
 
 ## Smoke test (for qa-tester)
 
@@ -204,3 +264,22 @@ Phase 3c checks:
   the underlying `n` drops below the confidence floor.
 - `grep -RniE "findings\.json|process-log|F[0-9]{2}\b" lib/recommendations.ts app/components/RecommendationsPanel.tsx`
   should return nothing (no internal artifact names in UI-facing code).
+
+Phase 3d checks (no `GROQ_API_KEY` needed for these):
+- Click "Generate executive summary" with no filters active: within a
+  second or two it should show a short paragraph and, underneath it, either
+  "Generated by a free-tier AI model." or "Generated from the numbers above
+  (no AI model configured for this run)." -- never a blank state or a
+  visible error.
+- `curl -s -X POST http://localhost:3411/api/summary -H "Content-Type:
+  application/json" -d '{"segment":"all platforms","posts":100,
+  "weightedEngagementRatePct":4.2,"liftPct":0.1,
+  "liftBaselineLabel":"global average","sponsoredVsOrganicPct":0.5,
+  "sponsoredDataTier":"full","recommendations":[]}'` should return
+  `{"text": "...", "source": "template"}` with HTTP 200 when no
+  `GROQ_API_KEY` is set.
+- `grep -RniE "findings\.json|process-log|F[0-9]{2}\b" lib/summary.ts
+  app/api/summary/route.ts app/components/ExecutiveSummary.tsx` should
+  return nothing (same no-internal-artifact-names rule as Phase 3c).
+- `npm run build && grep -r "GROQ_API_KEY" .next/static` should return
+  nothing (key never bundled into client JS).
