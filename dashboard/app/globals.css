@@ -1,15 +1,54 @@
 /* ---------------------------------------------------------------------
-   Design system: "editorial gold" dark theme, inspired by fine
-   monochromatic gold linework + classical-engraving precision. One
-   reserved gold accent is used only for the single most important
-   element per view (headline KPI, active filter, standout data point) --
-   everything else is charcoal/gray with thin 1px hairline dividers.
-   A light theme is provided for prefers-color-scheme: light so the app
-   stays legible either way, but the dark/gold theme is the primary intent.
-   Spacing follows a 4/8/16/24/32/48px scale.
+   Design system: "editorial gold". One reserved gold accent is used only
+   for the single most important element per view (headline KPI, active
+   filter, standout data point) -- everything else is neutral with thin
+   1px hairline dividers.
+
+   Both themes are first-class: same tokens, same component styling, only
+   the values differ. LIGHT is the default and primary theme (bright
+   background, per product direction); DARK is opt-in via the header
+   toggle and applied through [data-theme="dark"] on <html>. The choice is
+   controlled entirely by JS (ThemeToggle + the blocking init script in
+   layout.tsx) -- not by prefers-color-scheme -- so the toggle is always
+   the source of truth. Spacing follows a 4/8/16/24/32/48px scale.
 ------------------------------------------------------------------------ */
 
 :root {
+  /* ---- Light (default) ---- */
+  --bg: #f6f5f1;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-muted: #f1f0eb;
+  --border: rgba(17, 17, 20, 0.09);
+  --border-strong: rgba(17, 17, 20, 0.16);
+  --text: #17171a;
+  --text-muted: #5c5c64;
+  --text-faint: #86868d;
+
+  /* The one reserved accent. Used sparingly: headline KPI, active
+     filter/tab state, the standout bar in a chart. Never a full theme. */
+  --gold: #a97e2e;
+  --gold-strong: #8a6522;
+  --gold-soft: rgba(169, 126, 46, 0.1);
+  --gold-border: rgba(169, 126, 46, 0.35);
+  --gold-contrast: #ffffff;
+
+  /* Neutral chart series -- gray/blue-gray, not a rainbow palette. */
+  --series-a: #6b6c76;
+  --series-b: #b7b8c0;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 8px 24px rgba(16, 24, 40, 0.08);
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-serif: "Fraunces", Georgia, "Times New Roman", serif;
+}
+
+:root[data-theme="dark"] {
   --bg: #0a0a0b;
   --bg-elevated: #0f0f11;
   --surface: #16161a;
@@ -20,51 +59,17 @@
   --text-muted: #9d9da3;
   --text-faint: #6c6c72;
 
-  /* The one reserved accent. Used sparingly: headline KPI, active
-     filter/tab state, the standout bar in a chart. Never a full theme. */
   --gold: #cda45e;
   --gold-strong: #e2bc78;
   --gold-soft: rgba(205, 164, 94, 0.14);
   --gold-border: rgba(205, 164, 94, 0.4);
+  --gold-contrast: #17171a;
 
-  /* Neutral chart series -- gray/blue-gray, not a rainbow palette. */
   --series-a: #9497a1;
   --series-b: #55565e;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
   --shadow-sm: none;
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
-
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    Helvetica, Arial, sans-serif;
-  --font-serif: "Fraunces", Georgia, "Times New Roman", serif;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f7f6f3;
-    --bg-elevated: #ffffff;
-    --surface: #ffffff;
-    --surface-muted: #f2f1ec;
-    --border: rgba(17, 17, 20, 0.09);
-    --border-strong: rgba(17, 17, 20, 0.16);
-    --text: #17171a;
-    --text-muted: #62626a;
-    --text-faint: #8b8b92;
-
-    --gold: #a97e2e;
-    --gold-strong: #8a6522;
-    --gold-soft: rgba(169, 126, 46, 0.1);
-    --gold-border: rgba(169, 126, 46, 0.35);
-
-    --series-a: #6b6c76;
-    --series-b: #b7b8c0;
-
-    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
-    --shadow-md: 0 4px 16px rgba(16, 24, 40, 0.08);
-  }
 }
 
 * {
@@ -83,12 +88,153 @@ body {
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.55;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 main {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 48px 24px 96px;
+  padding: 36px 24px 96px;
+}
+
+/* ---------- Top bar (sticky app chrome) ---------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: saturate(180%) blur(8px);
+}
+
+.topbar-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.wordmark-mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--gold);
+  flex-shrink: 0;
+}
+
+.wordmark-text {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.wordmark-accent {
+  color: var(--gold);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3bb273;
+  box-shadow: 0 0 0 3px rgba(59, 178, 115, 0.18);
+  flex-shrink: 0;
+}
+
+/* ---------- Theme toggle ---------- */
+
+.theme-toggle {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+.theme-toggle-track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-strong);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.theme-toggle-icon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: var(--text-faint);
+  transition: color 0.15s ease;
+}
+
+.theme-toggle-icon.sun {
+  left: 5px;
+}
+
+.theme-toggle-icon.moon {
+  right: 6px;
+}
+
+.theme-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.18s ease, background-color 0.15s ease;
+}
+
+.theme-toggle[aria-pressed="true"] .theme-toggle-thumb {
+  transform: translateX(20px);
+}
+
+.theme-toggle[aria-pressed="true"] .theme-toggle-icon.moon {
+  color: var(--gold-contrast);
+}
+
+.theme-toggle[aria-pressed="false"] .theme-toggle-icon.sun {
+  color: var(--gold-contrast);
 }
 
 /* ---------- Header ---------- */
@@ -359,7 +505,7 @@ select:focus {
 
 .hero-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1px;
   background: var(--border);
   border: 1px solid var(--border);
@@ -412,6 +558,41 @@ select:focus {
   font-size: 0.74rem;
   color: var(--text-faint);
   margin-top: 8px;
+}
+
+/* ---------- Plain-language data-confidence tiering ---------- */
+/* Small dot + tooltip shown next to a value when the underlying data is
+   thin; friendly message shown instead of a value when there isn't enough
+   data at all. See components/DataConfidenceDot.tsx. */
+
+.confidence-dot {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 8px;
+  cursor: help;
+}
+
+.confidence-dot-mark {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+.value.muted-message,
+.rate.muted-message {
+  font-family: var(--font-sans, inherit);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.4;
+  letter-spacing: normal;
+}
+
+.rate.muted-message.small {
+  font-size: 0.78rem;
 }
 
 /* ---------- Secondary stat cards (smaller, deprioritized) ---------- */
@@ -648,30 +829,27 @@ td.platform-cell {
   border: none;
 }
 
-/* ---------- Methodology accordion ---------- */
+/* ---------- Inline help tooltip ---------- */
+/* Small "?" icon with a native title tooltip, used to fold one short
+   explanation next to a label (e.g. what "lift" means) instead of a
+   separate methodology panel. See components/HelpTip.tsx. */
 
-.methodology-details summary {
-  cursor: pointer;
-  list-style: none;
-  display: flex;
+.help-tip {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  vertical-align: middle;
+  margin-left: 6px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  cursor: help;
 }
 
-.methodology-details summary::-webkit-details-marker {
-  display: none;
-}
-
-.methodology-details summary .chevron {
+.help-tip-mark {
+  font-size: 0.65rem;
+  font-weight: 600;
   color: var(--text-faint);
-  transition: transform 0.15s ease;
-  font-size: 0.9rem;
-}
-
-.methodology-details[open] summary .chevron {
-  transform: rotate(90deg);
-}
-
-.methodology-details .note {
-  margin-top: 16px;
+  line-height: 1;
 }

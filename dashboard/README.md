@@ -1,12 +1,23 @@
-# Social Media Engagement Dashboard (Phase 3a — data layer + filter skeleton)
+# Social Media Engagement Dashboard (Phase 3a+3b — data layer, filters, lift indicator, fair sponsorship comparison)
 
 Next.js (TypeScript, App Router) dashboard over **pre-aggregated** post data.
-This is Phase 3a only: data layer + filterable skeleton, redesigned for
-readability (KPI cards, a sponsored-vs-organic chart, and a per-platform
-chart, all computed live client-side from the same aggregate cells -- no new
-aggregation logic). No lift indicator against segment baselines, rule-based
-recommendations, or LLM summary yet — those are sub-phases 3b–3e (see
-`process-log/DECISIONS.md`, ~19:55 entry).
+Phase 3a built the data layer + filterable skeleton (KPI cards, a per-platform
+chart). Phase 3b adds two live, pure-arithmetic indicators computed client-side
+from the same aggregate cells -- no new aggregation logic, no model, no LLM:
+
+- **Lift vs. baseline**: the currently filtered selection's weighted
+  engagement rate compared to its own platform baseline (or the global
+  baseline if no platform is selected) -- same "vs. platform average" framing
+  as F02-F09/F19/F20 in `findings.json`.
+- **Fair sponsored-vs-organic comparison**: instead of pooling all matching
+  posts into one organic rate and one sponsored rate, the comparison is
+  computed separately within each platform x category x creator-tier group
+  implied by the current filters, then the **median** of those per-group
+  ratios is reported -- the same "60 matched groups" logic as F11 in
+  `findings.json`, not a raw pooled number.
+
+Rule-based recommendations and the LLM executive summary are still pending —
+those are sub-phases 3c-3e (see `process-log/DECISIONS.md`, ~19:55 entry).
 
 ## What it does
 
@@ -106,6 +117,18 @@ runtime dependency beyond serving static files.
   `findings.json` baselines), consistent with the documented WEAK-SIGNAL,
   near-uniform engagement pattern — but the dashboard should not be read as
   reproducing the exact median figures cited in the strategy doc.
+- Phase 3b's "Lift vs. baseline" and "Sponsored vs. organic (fair)" numbers
+  are directional for the same reason (weighted average, not median) and say
+  so in their captions. Sanity check: the dashboard's controlled sponsored
+  comparison across all data (no filters) gives a median lift of **1.0005x**
+  (+0.05%) across 60 matched platform x category x tier groups, vs.
+  `findings.json` F11's median-based **1.0x, range 0.993x-1.006x** across the
+  same 60 groups — same order of magnitude and same "no real effect"
+  conclusion, not a different universe.
+- The fair sponsored comparison requires >=10 posts on both sides of a group
+  to count it (a lower floor than `findings.json`'s n>=30, since the
+  dashboard slices further by user-chosen filters); if a filter combination
+  leaves too few matched groups, the UI says so instead of showing a number.
 
 ## Smoke test (for qa-tester)
 
@@ -127,3 +150,20 @@ and the sponsorship dropdown — the "Result" and "Breakdown by platform"
 numbers must change immediately and match the sum-of-matching-cells you'd
 get by re-running `build_aggregates.py`'s groupby logic on the filtered
 subset.
+
+Phase 3b checks:
+- The hero row must show a "Lift vs. baseline" cell and a "Sponsored vs.
+  organic (fair)" cell alongside Posts/Views/Weighted ER — both update on
+  every filter change.
+- Selecting a single platform (e.g. Bilibili) with no other filters should
+  make "Lift vs. baseline" caption read "Bilibili average" and the lift value
+  should be close to 0% (this dataset is flat-signal by design, see
+  `findings.json`).
+- Switch to the "Sponsored vs. organic" tab: the headline lift number must
+  differ from a naive `(sponsoredRate - organicRate) / organicRate` on the
+  pooled cards above it whenever the platform/category/tier composition of
+  sponsored vs. organic posts differs (i.e. it is not simply recomputing the
+  pooled cards) — it is the median across matched groups instead.
+- Narrow the filters until fewer than 10 matched groups remain (e.g. pick one
+  platform + one category + one tier) — the sponsored tab should show the
+  "not enough matched groups" message instead of a fabricated number.

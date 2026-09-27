@@ -27,6 +27,12 @@ export const metadata: Metadata = {
     "Filterable engagement dashboard over pre-aggregated post data (platform x category x creator tier x sponsorship x month).",
 };
 
+// Runs before hydration (blocking, tiny, no external request) so a returning
+// visitor's saved theme applies with zero flash of the wrong theme. Default
+// is light -- we only ever need to *add* data-theme="dark"; light is the
+// baseline defined directly on :root in globals.css.
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('dashboard-theme');if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');}}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: {
@@ -34,6 +40,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${inter.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body>{children}</body>
     </html>
   );

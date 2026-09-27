@@ -10,6 +10,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { dataTier } from "@/lib/aggregate-utils";
+import DataConfidenceDot, {
+  INSUFFICIENT_DATA_MESSAGE,
+} from "./DataConfidenceDot";
 
 function fmtInt(n: number | null): string {
   if (n === null || Number.isNaN(n)) return "-";
@@ -32,9 +36,15 @@ const HIGHLIGHT_COLOR = "#cda45e";
 export default function SponsoredCompare({
   organic,
   sponsored,
+  medianGroupLift,
+  groupCount,
+  minGroupN,
 }: {
   organic: CompareSide;
   sponsored: CompareSide;
+  medianGroupLift: number | null;
+  groupCount: number;
+  minGroupN: number;
 }) {
   const organicRate = organic.weightedEngagementRate;
   const sponsoredRate = sponsored.weightedEngagementRate;
@@ -44,10 +54,11 @@ export default function SponsoredCompare({
     { name: "Sponsored", ratePct: sponsoredRate ? sponsoredRate * 100 : 0 },
   ];
 
-  let lift: number | null = null;
-  if (organicRate && organicRate > 0 && sponsoredRate !== null) {
-    lift = (sponsoredRate - organicRate) / organicRate;
-  }
+  // Headline lift is the MEDIAN across matched platform x category x tier
+  // groups (a fair, apples-to-apples comparison), not the pooled rates
+  // shown in the cards below (which can mix group composition between the
+  // organic and sponsored sides).
+  const lift = medianGroupLift !== null ? medianGroupLift - 1 : null;
 
   // Gold highlights only the standout side (the one with the higher rate),
   // per the "one reserved accent" rule -- not a fixed organic/sponsored
@@ -57,6 +68,10 @@ export default function SponsoredCompare({
   const sponsoredIsWinner =
     organicRate !== null && sponsoredRate !== null && sponsoredRate > organicRate;
 
+  const organicTier = dataTier(organic.n);
+  const sponsoredTier = dataTier(sponsored.n);
+  const liftTier = medianGroupLift !== null ? dataTier(minGroupN) : "insufficient";
+
   return (
     <div className="compare-grid">
       <div className="compare-cards">
@@ -65,28 +80,52 @@ export default function SponsoredCompare({
             <span className="dot" />
             Organic
           </span>
-          <div className="rate">{fmtPct(organicRate)}</div>
-          <div className="meta">{fmtInt(organic.n)} posts</div>
+          {organicTier === "insufficient" ? (
+            <div className="rate muted-message small">{INSUFFICIENT_DATA_MESSAGE}</div>
+          ) : (
+            <>
+              <div className="rate">
+                {fmtPct(organicRate)}
+                <DataConfidenceDot n={organic.n} />
+              </div>
+              <div className="meta">{fmtInt(organic.n)} posts</div>
+            </>
+          )}
         </div>
         <div className={`compare-card ${sponsoredIsWinner ? "winner" : ""}`}>
           <span className="tag">
             <span className="dot" />
             Sponsored
           </span>
-          <div className="rate">{fmtPct(sponsoredRate)}</div>
-          <div className="meta">{fmtInt(sponsored.n)} posts</div>
+          {sponsoredTier === "insufficient" ? (
+            <div className="rate muted-message small">{INSUFFICIENT_DATA_MESSAGE}</div>
+          ) : (
+            <>
+              <div className="rate">
+                {fmtPct(sponsoredRate)}
+                <DataConfidenceDot n={sponsored.n} />
+              </div>
+              <div className="meta">{fmtInt(sponsored.n)} posts</div>
+            </>
+          )}
         </div>
-        {lift !== null && (
+        {lift !== null ? (
           <p className="lift-note">
             Sponsored is{" "}
             <strong>
               {lift >= 0 ? "+" : ""}
               {(lift * 100).toFixed(1)}%
             </strong>{" "}
-            vs. organic on weighted engagement rate, within the current
-            filters (directional -- see STRATEGY.md for the vetted,
-            segment-controlled comparison).
+            vs. organic
+            {liftTier === "thin" && <DataConfidenceDot n={minGroupN} />}{" "}
+            -- median across{" "}
+            {liftTier === "full" ? `${groupCount} matched` : "matched"} platform
+            x category x creator-tier groups, comparing only similar
+            segments to each other. Not the raw pooled cards above, which
+            can mix group composition between organic and sponsored.
           </p>
+        ) : (
+          <p className="lift-note">{INSUFFICIENT_DATA_MESSAGE}</p>
         )}
       </div>
       <div className="chart-wrap small">

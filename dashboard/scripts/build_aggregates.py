@@ -128,15 +128,16 @@ def build():
             tier: [int(row["min"]), int(row["max"])]
             for tier, row in tier_bounds.iterrows()
         },
+        # Internal build note, not rendered in the app UI -- kept here only
+        # for engineers regenerating this file, so keep it self-contained
+        # (no references to internal project docs or process artifacts).
         "methodology_note": (
             "Each row is one aggregate cell (platform x category x creator tier x "
-            "sponsored flag x month), never an individual post. creator_tier = "
-            "follower_count quartiles (Small/Mid/Large/Mega), same proxy approved "
-            "at GATE 0 and used in solution/outputs/findings.json. Engagement rate "
-            "shown in the dashboard is a weighted average -- sum(likes+shares+"
-            "comments)/sum(views) across whatever cells match the active filters "
-            "-- not a prediction or a lift/recommendation (those are later "
-            "sub-phases 3b/3c)."
+            "sponsored flag x month), never an individual post. creator_tier is "
+            "based on follower-count quartiles (Small/Mid/Large/Mega). Engagement "
+            "rate shown in the dashboard is a weighted average -- sum(likes+shares"
+            "+comments)/sum(views) across whatever cells match the active filters "
+            "-- not a prediction."
         ),
         "data": rows,
     }

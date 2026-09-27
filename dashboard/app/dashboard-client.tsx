@@ -2,9 +2,21 @@
 
 import { useMemo, useState } from "react";
 import type { AggregatesFile, Filters } from "@/lib/types";
-import { DEFAULT_FILTERS, aggregate, aggregateByPlatform } from "@/lib/aggregate-utils";
+import {
+  DEFAULT_FILTERS,
+  aggregate,
+  aggregateByPlatform,
+  aggregateSponsoredCompareControlled,
+  computeLiftVsBaseline,
+} from "@/lib/aggregate-utils";
+import { dataTier } from "@/lib/aggregate-utils";
 import PlatformChart, { platformColor } from "./components/PlatformChart";
 import SponsoredCompare from "./components/SponsoredCompare";
+import LiftIndicator from "./components/LiftIndicator";
+import DataConfidenceDot, {
+  INSUFFICIENT_DATA_MESSAGE,
+} from "./components/DataConfidenceDot";
+import HelpTip from "./components/HelpTip";
 
 function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -42,21 +54,17 @@ export default function DashboardClient({
     () => aggregateByPlatform(aggregates, filters),
     [aggregates, filters]
   );
-  const organicResult = useMemo(
-    () => aggregate(aggregates, { ...filters, sponsored: "organic" }),
+  const sponsoredCompare = useMemo(
+    () => aggregateSponsoredCompareControlled(aggregates, filters),
     [aggregates, filters]
   );
-  const sponsoredResult = useMemo(
-    () => aggregate(aggregates, { ...filters, sponsored: "sponsored" }),
-    [aggregates, filters]
-  );
+  const { organic: organicResult, sponsored: sponsoredResult, medianGroupLift } =
+    sponsoredCompare;
 
-  const lift = useMemo(() => {
-    const o = organicResult.weightedEngagementRate;
-    const s = sponsoredResult.weightedEngagementRate;
-    if (o === null || o === 0 || s === null) return null;
-    return (s - o) / o;
-  }, [organicResult, sponsoredResult]);
+  const baselineLift = useMemo(
+    () => computeLiftVsBaseline(aggregates, filters),
+    [aggregates, filters]
+  );
 
   const activeFilterCount =
     filters.platforms.length +
@@ -224,16 +232,37 @@ export default function DashboardClient({
             <div className="value">{fmtInt(result.sumViews)}</div>
           </div>
           <div className="hero-cell lead">
-            <div className="label">Weighted engagement rate</div>
+            <div className="label">
+              Weighted engagement rate
+              <HelpTip text="Likes + shares + comments, divided by views, combined across every matching post so bigger posts count more." />
+            </div>
             <div className="value">{fmtPct(result.weightedEngagementRate)}</div>
           </div>
-          <div className="hero-cell">
-            <div className="label">Sponsored vs. organic</div>
-            <div className="value">
-              {lift === null ? "-" : `${lift >= 0 ? "+" : ""}${(lift * 100).toFixed(1)}%`}
-            </div>
-            <div className="sub">weighted ER lift, current filters</div>
-          </div>
+          <LiftIndicator result={baselineLift} />
+          {(() => {
+            const sponsoredVsOrganicTier =
+              medianGroupLift === null ? "insufficient" : dataTier(sponsoredCompare.minGroupN);
+            if (sponsoredVsOrganicTier === "insufficient" || medianGroupLift === null) {
+              return (
+                <div className="hero-cell">
+                  <div className="label">Sponsored vs. organic (fair)</div>
+                  <div className="value muted-message">{INSUFFICIENT_DATA_MESSAGE}</div>
+                </div>
+              );
+            }
+            return (
+              <div className="hero-cell">
+                <div className="label">Sponsored vs. organic (fair)</div>
+                <div className="value">
+                  {`${medianGroupLift >= 1 ? "+" : ""}${((medianGroupLift - 1) * 100).toFixed(1)}%`}
+                  <DataConfidenceDot n={sponsoredCompare.minGroupN} />
+                </div>
+                <div className="sub">
+                  median across matched platform x category x tier groups
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         <div className="stat-grid">
@@ -259,13 +288,6 @@ export default function DashboardClient({
           </div>
         </div>
 
-        <p className="note" style={{ marginTop: 20 }}>
-          Engagement rate = (likes + shares + comments) / views, weighted
-          across all matched aggregate cells (sum of sums, not an average of
-          averages). This is a live filter, not a finding or recommendation --
-          see solution/outputs/findings.json for the vetted, segmented
-          analysis this dashboard is built on top of.
-        </p>
       </section>
 
       {/* ---------- Secondary detail: tabs instead of stacked panels ---------- */}
@@ -330,34 +352,15 @@ export default function DashboardClient({
             <p className="panel-subtitle" style={{ marginBottom: 16 }}>
               Weighted engagement rate, within current filters
             </p>
-            <SponsoredCompare organic={organicResult} sponsored={sponsoredResult} />
+            <SponsoredCompare
+              organic={organicResult}
+              sponsored={sponsoredResult}
+              medianGroupLift={medianGroupLift}
+              groupCount={sponsoredCompare.groupCount}
+              minGroupN={sponsoredCompare.minGroupN}
+            />
           </div>
         )}
-      </section>
-
-      {/* ---------- Methodology: collapsed by default, one click away ---------- */}
-      <section className="panel">
-        <details className="methodology-details">
-          <summary>
-            <h2 className="panel-title" style={{ margin: 0 }}>
-              Methodology
-            </h2>
-            <span className="chevron">&#8250;</span>
-          </summary>
-          <p className="note">{aggregates.methodology_note}</p>
-          <p className="note" style={{ marginTop: 10 }}>
-            Creator tier follower-count bounds:{" "}
-            {Object.entries(aggregates.creator_tier_follower_bounds)
-              .map(([tier, [lo, hi]]) => `${tier} ${lo.toLocaleString()}-${hi.toLocaleString()}`)
-              .join(" | ")}
-          </p>
-          <p className="note" style={{ marginTop: 10 }}>
-            Data generated: {aggregates.generated_at} from {aggregates.source}.
-            Phase 3a scope: filterable aggregate skeleton -- no rule-based
-            recommendations or LLM summary yet (see process-log/DECISIONS.md,
-            sub-phases 3c-3e).
-          </p>
-        </details>
       </section>
     </>
   );
