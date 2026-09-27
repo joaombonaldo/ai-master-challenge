@@ -55,6 +55,7 @@ Analisamos 52.214 posts de cinco plataformas (Instagram, TikTok, YouTube, Bilibi
 - **Sem custo.** Não há campo de gasto nos dados. ROI em R$ não foi calculado; patrocínio foi avaliado só por lift de engajamento.
 - **Poucos posts nos nichos testáveis.** Grupos com <30 posts foram excluídos das conclusões; nichos recomendados têm 47–111 posts (ou 20 no caso do benchmark do brief). Precisam ser validados em campo.
 - **Proxies.** Tamanho de criador = quartis de follower_count (aprovado); público = um único grupo principal por post (não distribuição completa).
+- **Taxa de requisições Groq.** O dashboard usa o tier gratuito do Groq para gerar resumos executivos, que tem limite de requisições por minuto — em uso intenso (ex.: vários avaliadores testando simultaneamente), o botão pode recorrer ao fallback de template em vez da resposta por IA. Isso é esperado e documentado, não um erro de sistema.
 
 ---
 
@@ -130,6 +131,28 @@ Erros documentados em [process-log/DECISIONS.md](./process-log/DECISIONS.md) e [
 - **Process log completo:** [`process-log/PROCESS_LOG.md`](./process-log/PROCESS_LOG.md) — narrativa por fase (0-3) com agentes, onde IA errou, decisão do líder, iterações.
 - **QA + cost tracking:** [`process-log/qa/04-full-project-qa.md`](./process-log/qa/04-full-project-qa.md) (8 checks, PASS); [`process-log/cost-log.md`](./process-log/cost-log.md) (token/custo por fase, $65.15 total).
 - **Dashboard ao vivo:** https://social-pulse-dashboard.vercel.app (código em `dashboard/`, source-deployable no Vercel, repositório GitHub desta submissão).
+
+---
+
+## Próximos passos com o Dashboard
+
+**Atualização de dados**
+- Sincronização em tempo real ou agendada com a fonte de dados interna real, substituindo o CSV estático — a arquitetura completa (agregação, dashboard, camada de IA) já está pronta para consumir dados atualizados sem mudanças estruturais.
+- Visão de tendência histórica (série temporal por mês, não apenas um filtro estático) — para acompanhar se um segmento está melhorando ou piorando, em vez de apenas um instantâneo do momento.
+- Alertas de anomalia: sinalizar quando o número ao vivo de um segmento se desvia de forma relevante de sua própria baseline histórica (extensão do indicador de lift existente, mas de forma proativa em vez de sob demanda).
+
+**Distribuição e relatórios**
+- Briefing automatizado semanal via Slack ou e-mail — reaproveitaria a mesma lógica do "Gerar Resumo Executivo", agendado e entregue ao canal de marketing em vez de exigir abrir o dashboard.
+- Geração nativa de PowerPoint em vez de um prompt template para usar em outra ferramenta — quando o orçamento permitir um modelo de IA pago com geração nativa de arquivo, evoluir do "copie este prompt" atual para gerar o arquivo de fato.
+- Loop de feedback fechado: como a maioria das recomendações é honestamente enquadrada como "testar," adicionar uma forma leve de registrar o resultado real do teste de volta no sistema, para que a ferramenta acompanhe quais hipóteses foram validadas ao longo do tempo em vez de só propor novas.
+
+**Profundidade de análise**
+- Reavaliar um modelo preditivo quando existirem dados reais de custo/receita ou sinais de conteúdo mais ricos (thumbnail/vídeo/áudio) — `solution/outputs/ml_feasibility.md` documenta exatamente o que precisaria ser verdade para isso valer a pena.
+- Modo "pergunte com linguagem livre" sobre os dados do dashboard — ex.: "por que o TikTok teve desempenho pior em agosto?" respondido por um agente que decide qual corte de dados calcular, em vez de apenas os filtros fixos atuais.
+
+**Robustez de produção**
+- Autenticação e controle de acesso caso a ferramenta saia do estágio de demonstração pública — a proteção SSO está desligada hoje, aceitável para uma demo pública de avaliação, mas não para uso interno real com números sensíveis.
+- Upgrade do Groq gratuito para um modelo pago, para confiabilidade e melhor qualidade de saída — é o caminho de atualização planejado da LLM, mencionado na documentação do projeto.
 
 ---
 
