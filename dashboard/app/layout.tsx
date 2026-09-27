@@ -1,23 +1,37 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter } from "next/font/google";
+import localFont from "next/font/local";
 import ThemeRegistry from "./ThemeRegistry";
 import "./globals.css";
 
-// Self-hosted at build time by next/font (no runtime request, no extra npm
-// dependency). Fraunces: editorial serif for headings/big numbers -- the
-// "engraving/authority" register. Inter: clean sans for body/data/labels.
-// Only the weights actually used are loaded to keep the bundle light.
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  weight: ["500", "600"],
-  style: ["normal", "italic"],
+// Self-hosted woff2 files (app/fonts/) instead of next/font/google.
+// next/font/google fetches font metadata/files from Google at BUILD TIME;
+// on Vercel's build network this call can fail/timeout and crashes webpack
+// with an opaque "Cannot read properties of null (reading '1')" error.
+// Self-hosting via next/font/local removes that live-network dependency
+// entirely while keeping the same zero-layout-shift behavior, the same
+// family/weights/styles, and the same --font-serif/--font-sans variable
+// names, so no other component needs to change.
+// Files downloaded once from the static (not API) fonts.gstatic.com host,
+// latin subset only, exactly the weights/styles previously requested:
+// Fraunces 500/600 normal+italic, Inter 400/500/600/700 normal.
+const fraunces = localFont({
+  src: [
+    { path: "./fonts/fraunces-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/fraunces-500-italic.woff2", weight: "500", style: "italic" },
+    { path: "./fonts/fraunces-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/fraunces-600-italic.woff2", weight: "600", style: "italic" },
+  ],
   variable: "--font-serif",
   display: "swap",
 });
 
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const inter = localFont({
+  src: [
+    { path: "./fonts/inter-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/inter-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/inter-600.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/inter-700.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-sans",
   display: "swap",
 });
