@@ -42,6 +42,8 @@ _Mantido pelo agente documenter a partir de process-log/handoffs/ e DECISIONS.md
 
 **Decisões do líder:** ML/LangGraph rejeitados; Material UI adotado; dark mode removido; saída LLM em PT-BR; rule-based+LLM fallback; resumo+recomendações unificados; abas→3 seções sempre visíveis; content_type/language/audience_location como filtros reais; per-view metric rates expostos.
 
-**Status:** Fases 3a–3d concluídas. Fase 3e (QA formal + deploy Vercel) pendente.
+**Status:** Fases 3a–3e concluídas.
+
+**Fase 3e (QA + Deploy):** qa-tester completou smoke test (process-log/qa/03-dashboard-smoketest.md) — PASS em todos 7 checks (reprodutibilidade, exposição dados brutos/segredos, vazamento artefatos, .env, reconciliação números, fallbacks, README). Deploy Vercel via CLI; identificou e corrigiu falha real (next/font/google crashando no build — resolvido com fonts locais via next/font/local). Live em https://social-pulse-dashboard.vercel.app, verificado end-to-end (chamada LLM real confirmada em produção). Proteção SSO desabilitada (líder aprovado) — seguro: scan de segurança confirmou nenhum dado bruto/segredo/artefatos internos expostos.
 
 **Iterações e Custo:** ~22 rodadas (developer + data-scientist). [Consultar cost-log.md para tokens.]
