@@ -31,3 +31,17 @@ _Mantido pelo agente documenter a partir de process-log/handoffs/ e DECISIONS.md
 **Resultado:** 21 achados com todas as alegações rastreáveis; nenhuma combinação passa 1,4% de efeito; patrocínio sem lift (F11: -0,7% a +0,6%, típico 0%); 2 testes controlados, 3 itens "parar", 3 itens "monitorar".
 
 **Iterações e Custo:** 11 rodadas (5 strategist + 4 head-of-marketing + 2 qa-tester) + 1 bug corrigido em F19. [Consultar cost-log.md para tokens.]
+
+## Fase 3 — Ferramenta Extra: Dashboard (2026-09-26)
+
+**Entregáveis:** dashboard/ (Next.js 15 + Material UI, Vercel-ready). Dashboard filtrável sobre agregados pré-computados (plataforma x categoria x tier de criador x patrocinado x mês); indicador de lift calculado + comparação justa patrocinado vs. orgânico (mediana de razões por grupo, controlada por plataforma/categoria/tier); resumo executivo + recomendações gerados via LLM (Groq free tier, openai/gpt-oss-120b, PT-BR) no botão "Gerar LLM Report", com fallback rule-based/template se API indisponível. 7 commits (esqueleto até merge do LLM report), ainda não enviados a origin.
+
+**Agentes/Modelos:** developer (sonnet) — ~14 rodadas (camada de dados, design G4→MUI, indicador lift/fairness, recomendações rule-based→LLM, múltiplos passes de UX). data-scientist (sonnet) — 1 spike de viabilidade ML (rejeitado).
+
+**IA errou / Corrigido:** (1) Comparação patrocinado-vs-orgânico inicial fazia pooling ingênuo (violação de GATE 0) → corrigida para mediana de razões por grupo, igual à metodologia de F11. (2) App expunha nomes internos (findings.json, tags F0-F21, "aggregate cells") → scrubbed, agora autocontido como produto. (3) Cores de gráficos inconsistentes entre componentes (tokens diferentes) → unificadas. (4) Recomendações LLM mislabelaram gap 0.02pp como "alta confiança" → piso de materialidade 3pp adicionado ao prompt. (5) Auto-fetch LLM a cada filtro esgotava rate limit Groq silenciosamente → mudado para geração click-triggered.
+
+**Decisões do líder:** Modelo preditivo ML rejeitado (R²=-0.00066, AUC 0.481 vs. baseline 50%, chance-level); LangGraph rejeitado (composição simples de funções suficiente); Material UI adotado (G4-editorial descartado); dark mode removido; toda saída LLM em PT-BR; recomendações rule-based → LLM com fallback; resumo + recomendações unificados; abas → 3 seções sempre visíveis. Próximos passos (não construídos): modelo pago, briefing Slack semanal, análise "agentic" (LLM respondendo perguntas livres).
+
+**Status:** Phase 3a–3d concluídas. Phase 3e (QA/deploy Vercel) não iniciada.
+
+**Iterações e Custo:** ~14 rodadas (developer) + 1 spike (data-scientist). [Consultar cost-log.md para tokens.]
