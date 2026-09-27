@@ -63,12 +63,19 @@ word), plain-language paragraph:
 ## What it does
 
 - `scripts/build_aggregates.py` reads `data/raw/social_media_dataset.csv`
-  (never shipped to the app or the browser) and writes a compact aggregate
-  artifact to `public/data/aggregates.json`.
-- Each row in that artifact is one **aggregate cell**: platform x category x
-  creator tier x sponsored flag x month, with post count and summed
-  views/likes/shares/comments/followers. There are 2,969 cells covering all
-  52,214 source rows (~136 KB).
+  (never shipped to the app or the browser) and writes TWO artifacts:
+  - `public/data/aggregates.json` -- the client-facing cube, fetched by the
+    browser and used for every filter/chart on the page.
+  - `data/server_aggregates.json` -- a richer, **server-only** cube, never
+    placed under `public/` and never fetched by client code. Read only by
+    `app/api/recommendations/route.ts` (via `lib/server-aggregates.ts`) to
+    compute format/duration/posting-time breakdowns within the user's
+    active filter for the LLM recommendations prompt. See "Why two
+    aggregate files" below.
+- Each row in the client-facing artifact is one **aggregate cell**: platform
+  x category x creator tier x sponsored flag x month, with post count and
+  summed views/likes/shares/comments/followers. There are 2,969 cells
+  covering all 52,214 source rows (~136 KB).
 - Creator tier = follower-count quartiles (Small/Mid/Large/Mega), the same
   GATE-0-approved proxy used in `solution/analysis/02_segmented_analysis.py`
   and `solution/outputs/findings.json`.
@@ -77,8 +84,27 @@ word), plain-language paragraph:
   change it recombines the matching cells client-side (`lib/aggregate-utils.ts`)
   by summing counts (sums are exact/additive for any filter combination) and
   deriving a weighted engagement rate = sum(likes+shares+comments)/sum(views).
-- No LLM calls, no ML model — the Recommendations tab (Phase 3c) is pure
-  rule-based arithmetic on the same aggregate cells, zero runtime cost.
+- The rule-based Recommendations engine (Phase 3c, `lib/recommendations.ts`)
+  is pure arithmetic on the same aggregate cells, zero runtime cost, and is
+  also the safety-net fallback if the LLM report (below) fails or isn't
+  configured.
+
+### Why two aggregate files (Phase 3g)
+
+The LLM recommendations prompt needs format/duration/posting-time
+breakdowns computed **within the user's active filter** (e.g. "what works
+for tech" or "what works for Mega creators"), not dataset-wide. Extending
+the client-facing 5-dimension cube (platform x category x tier x sponsored x
+month, ~2,969 cells / ~136 KB) with `content_type` x `length_bucket` x
+`daypart` as three more filterable dimensions was measured on the real
+dataset and rejected: the resulting 8-dimension cube has **40,682 non-empty
+cells (~1.5 MB)** -- a >10x payload increase to every browser tab just to
+power three breakdowns only the server-side LLM prompt needs. Instead, that
+richer cube lives in `data/server_aggregates.json`, outside `public/`,
+read only by the Node API route (`export const runtime = "nodejs"`) via
+`lib/server-aggregates.ts`. The client-facing cube is untouched (actually
+~4 KB smaller after removing the old dataset-wide breakdown fields it used
+to carry for the same purpose).
 
 ## Data privacy / token-budget rule
 
@@ -96,7 +122,9 @@ a project dependency, see `solution/analysis/requirements.txt` if present).
 ```bash
 cd dashboard
 
-# 1. (Re)generate the aggregate artifact from the raw CSV.
+# 1. (Re)generate both aggregate artifacts from the raw CSV -- the
+#    client-facing public/data/aggregates.json AND the server-only
+#    data/server_aggregates.json (see "Why two aggregate files" above).
 #    Only needs to be re-run if the raw dataset changes.
 python3 scripts/build_aggregates.py
 
@@ -155,8 +183,12 @@ runtime dependency beyond serving static files.
    integration. No environment variables are required to run the app --
    the only optional one is `GROQ_API_KEY` (Phase 3d, see above), and the
    app works fully without it.
-4. `public/data/aggregates.json` is checked into git, so Vercel builds
-   deterministically without needing access to `data/raw/` at all.
+4. `public/data/aggregates.json` AND `data/server_aggregates.json` are both
+   checked into git, so Vercel builds deterministically without needing
+   access to `data/raw/` at all. Next.js's build-time file tracing picks up
+   `data/server_aggregates.json` automatically for the recommendations API
+   route (confirmed via `.next/server/app/api/recommendations/route.js.nft.json`
+   after `npm run build`) -- no extra Vercel/Next config needed.
 5. If the raw dataset changes later, re-run
    `python3 scripts/build_aggregates.py` locally, commit the updated
    `public/data/aggregates.json`, and redeploy (or wire this into a CI step —

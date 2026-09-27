@@ -20,7 +20,9 @@ Run from the `dashboard/` directory:
     python3 scripts/build_aggregates.py
 
 Reads:  ../data/raw/social_media_dataset.csv (relative to this script's repo)
-Writes: public/data/aggregates.json
+Writes: public/data/aggregates.json (shipped to the browser)
+        data/server_aggregates.json (server-only, richer cube -- see
+        build_server_aggregates() below; never placed under public/)
 """
 import json
 import os
@@ -32,6 +34,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 RAW_PATH = os.path.join(REPO_ROOT, "data", "raw", "social_media_dataset.csv")
 OUT_PATH = os.path.join(SCRIPT_DIR, "..", "public", "data", "aggregates.json")
+# Server-only companion artifact -- see the big comment above
+# `build_server_aggregates()` below for why this is a SEPARATE file that is
+# never placed under public/.
+SERVER_OUT_PATH = os.path.join(SCRIPT_DIR, "..", "data", "server_aggregates.json")
 
 
 def build():
@@ -45,6 +51,31 @@ def build():
     # Same GATE-0-approved proxy as solution/analysis: follower_count quartiles.
     df["creator_tier"] = pd.qcut(
         df["follower_count"], 4, labels=["Small", "Mid", "Large", "Mega"]
+    )
+
+    # Same daypart bucketing as solution/analysis/02_segmented_analysis.py
+    # (hour of post_date, no timezone normalization available).
+    df["hour"] = df["post_date"].dt.hour
+
+    def daypart(h):
+        if pd.isna(h):
+            return None
+        h = int(h)
+        if 5 <= h < 12:
+            return "morning"
+        if 12 <= h < 17:
+            return "afternoon"
+        if 17 <= h < 21:
+            return "evening"
+        return "night"
+
+    df["daypart"] = df["hour"].apply(daypart)
+
+    # Same length bucketing as solution/analysis/02_segmented_analysis.py:
+    # content_length quartiles WITHIN content_type, because units differ
+    # (video seconds vs. text/caption characters vs. image/mixed captions).
+    df["length_bucket"] = df.groupby("content_type")["content_length"].transform(
+        lambda s: pd.qcut(s, 4, labels=["Q1 (mais curto)", "Q2", "Q3", "Q4 (mais longo)"])
     )
 
     platforms = sorted(df["platform"].unique().tolist())
@@ -148,6 +179,123 @@ def build():
 
     size_kb = os.path.getsize(OUT_PATH) / 1024
     print(f"Wrote {OUT_PATH} ({size_kb:.1f} KB, {len(rows)} cells from {len(df):,} rows)")
+
+    build_server_aggregates(df, p_idx, c_idx, t_idx, m_idx, platforms, categories, tiers, months)
+
+
+# ---------------------------------------------------------------------
+# Phase 3g (leader decision): format/duration/posting-time breakdowns sent
+# to the LLM recommendations route must be computed WITHIN the current
+# dashboard filter (platform x category x tier x sponsored x month), not
+# dataset-wide. Naively extending the CLIENT-side cube above with
+# content_type x length_bucket x daypart as three more filter dimensions
+# was measured and rejected: it grows the cube from 2,969 non-empty cells
+# (~140 KB shipped today) to 40,682 non-empty cells (~1.5+ MB) on this
+# dataset -- a >10x payload increase to the BROWSER just to serve three
+# breakdowns that only the server-side LLM prompt needs. So instead this
+# richer 8-dimension cube is written to a SEPARATE file that lives outside
+# public/ (dashboard/data/server_aggregates.json, never fetched by the
+# client) and is read only by app/api/recommendations/route.ts (Node
+# runtime) via lib/server-aggregates.ts, which re-aggregates it on demand
+# for whatever filter the user currently has active. Raw rows still never
+# leave this build step or the server process -- only aggregate sums.
+# ---------------------------------------------------------------------
+def build_server_aggregates(df, p_idx, c_idx, t_idx, m_idx, platforms, categories, tiers, months):
+    content_types = sorted(df["content_type"].dropna().unique().tolist())
+    length_buckets = ["Q1 (mais curto)", "Q2", "Q3", "Q4 (mais longo)"]
+    dayparts = ["morning", "afternoon", "evening", "night"]
+    ct_idx = {v: i for i, v in enumerate(content_types)}
+    lb_idx = {v: i for i, v in enumerate(length_buckets)}
+    dp_idx = {v: i for i, v in enumerate(dayparts)}
+
+    cols = [
+        "platform",
+        "content_category",
+        "creator_tier",
+        "is_sponsored",
+        "month",
+        "content_type",
+        "length_bucket",
+        "daypart",
+    ]
+    grouped = (
+        df.groupby(cols, observed=True)
+        .agg(
+            n=("id", "size"),
+            sum_views=("views", "sum"),
+            sum_likes=("likes", "sum"),
+            sum_shares=("shares", "sum"),
+            sum_comments=("comments_count", "sum"),
+        )
+        .reset_index()
+    )
+
+    rows = []
+    for r in grouped.itertuples(index=False):
+        if pd.isna(r.month) or pd.isna(r.length_bucket) or pd.isna(r.daypart):
+            continue
+        rows.append(
+            [
+                p_idx[r.platform],
+                c_idx[r.content_category],
+                t_idx[r.creator_tier],
+                1 if r.is_sponsored else 0,
+                m_idx[r.month],
+                ct_idx[r.content_type],
+                lb_idx[r.length_bucket],
+                dp_idx[r.daypart],
+                int(r.n),
+                int(r.sum_views),
+                int(r.sum_likes),
+                int(r.sum_shares),
+                int(r.sum_comments),
+            ]
+        )
+
+    out = {
+        "generated_at": pd.Timestamp.now(tz="UTC").isoformat(),
+        "note": (
+            "SERVER-ONLY artifact. Do not place under public/ or fetch it "
+            "from client code -- it exists only to let "
+            "app/api/recommendations/route.ts compute format/duration/"
+            "posting-time breakdowns WITHIN the dashboard's active filter, "
+            "without shipping this much granularity to the browser. See "
+            "scripts/build_aggregates.py build_server_aggregates()."
+        ),
+        "legend": {
+            "platform": platforms,
+            "category": categories,
+            "creator_tier": tiers,
+            "sponsored": ["organic", "sponsored"],
+            "month": months,
+            "content_type": content_types,
+            "length_bucket": length_buckets,
+            "daypart": dayparts,
+        },
+        "columns": [
+            "platform_idx",
+            "category_idx",
+            "creator_tier_idx",
+            "sponsored",
+            "month_idx",
+            "content_type_idx",
+            "length_bucket_idx",
+            "daypart_idx",
+            "n",
+            "sum_views",
+            "sum_likes",
+            "sum_shares",
+            "sum_comments",
+        ],
+        "data": rows,
+    }
+
+    os.makedirs(os.path.dirname(SERVER_OUT_PATH), exist_ok=True)
+    with open(SERVER_OUT_PATH, "w") as f:
+        json.dump(out, f, separators=(",", ":"))
+
+    size_kb = os.path.getsize(SERVER_OUT_PATH) / 1024
+    print(f"Wrote {SERVER_OUT_PATH} ({size_kb:.1f} KB, {len(rows)} cells, server-only)")
 
 
 if __name__ == "__main__":

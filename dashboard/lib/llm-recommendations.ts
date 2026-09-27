@@ -2,6 +2,7 @@ import type { AggregatedResult, AggregatesFile, Filters } from "./types";
 import type { DataTier } from "./aggregate-utils";
 import {
   aggregate,
+  aggregateByAxis,
   aggregateByPlatform,
   aggregateSponsoredCompareControlled,
   dataTier,
@@ -14,10 +15,32 @@ import { describeSegment, buildRecommendations, type Recommendation } from "./re
 // written rule-based sentences to rephrase), this payload sends only RAW
 // AGGREGATE NUMBERS -- rates, counts, lifts, confidence tiers -- so the
 // model has to reason over the numbers itself, not restate pre-written
-// copy. Still never raw post rows: everything here is derived from the
-// same aggregate cells (`aggregate` / `aggregateByPlatform` /
+// copy. Still never raw post rows: everything here is derived from
+// aggregate cells (`aggregate` / `aggregateByPlatform` / `aggregateByAxis` /
 // `aggregateSponsoredCompareControlled`) that power the rest of the
-// dashboard.
+// dashboard, plus the dataset-wide format/duration/posting-time
+// breakdowns baked into aggregates.json by scripts/build_aggregates.py.
+//
+// Phase 3f fix (leader complaint: "recommendations don't reason over the
+// data we have"): the previous version only ever sent a FULL ranked
+// breakdown for platform, and gated the category/tier comparison behind
+// "exactly one value selected" -- so most of the time the model only saw
+// a narrow slice and could not prioritize across the real landscape. Now
+// platform, category AND tier are ALWAYS sent fully ranked (every value,
+// best to worst, with n + confidence), regardless of what's filtered. See
+// buildPrompt in app/api/recommendations/route.ts for how this is used to
+// ask the model to PRIORITIZE across axes, not just describe one.
+//
+// Phase 3g fix (leader decision): format/duration/posting-time breakdowns
+// used to be dataset-wide (baked into aggregates.json at build time,
+// ignoring the user's filter). The leader flagged this as wrong -- if the
+// user filters to "tech" or to "Mega" creators, the format/duration/timing
+// suggestion should reflect THAT slice, not the whole dataset. This client
+// module no longer computes those three breakdowns at all: it only passes
+// the raw `filters` object through in the payload, and the API route
+// (app/api/recommendations/route.ts) recomputes format/duration/daypart
+// WITHIN that filter server-side, from a richer server-only cube (see
+// lib/server-aggregates.ts) that is never shipped to the browser.
 //
 // `fallbackRecommendations` carries the existing rule-based engine's
 // output too -- the API route's client caller uses it as the safety net
@@ -31,17 +54,17 @@ export interface SegmentStat {
   confidence: DataTier;
 }
 
-export interface AxisComparison {
-  axisLabel: string; // "categoria" | "tier de criador"
-  current: SegmentStat;
-  best: SegmentStat | null; // best-performing sibling on this axis, if any has enough data
-  worst: SegmentStat | null; // worst-performing sibling on this axis, if any has enough data
-}
-
 export interface LlmRecommendationsPayload {
   segment: string;
   posts: number;
+  // Raw filter state, passed through so the API route can recompute the
+  // format/duration/daypart breakdowns WITHIN this exact filter server-side
+  // (see lib/server-aggregates.ts) -- those breakdowns are no longer
+  // computed dataset-wide here.
+  filters: Filters;
   platformBreakdown: SegmentStat[];
+  categoryBreakdown: SegmentStat[];
+  tierBreakdown: SegmentStat[];
   sponsoredComparison: {
     medianGroupLiftPct: number | null; // (ratio - 1) * 100
     confidence: DataTier;
@@ -49,8 +72,6 @@ export interface LlmRecommendationsPayload {
     sponsoredPosts: number;
     groupsCompared: number;
   };
-  categoryComparison: AxisComparison | null; // only when exactly one category is selected
-  tierComparison: AxisComparison | null; // only when exactly one creator tier is selected
   fallbackRecommendations: Array<{ title: string; body: string; action: string; tone: string }>;
 }
 
@@ -64,48 +85,6 @@ function toSegmentStat(value: string, result: AggregatedResult): SegmentStat {
   };
 }
 
-type AxisKey = "categories" | "tiers";
-
-const AXIS_LABEL: Record<AxisKey, string> = {
-  categories: "categoria",
-  tiers: "tier de criador",
-};
-
-function buildAxisComparison(
-  file: AggregatesFile,
-  filters: Filters,
-  axis: AxisKey
-): AxisComparison | null {
-  const selected = filters[axis];
-  if (selected.length !== 1) return null;
-
-  const current = selected[0];
-  const currentResult = aggregate(file, filters);
-  const currentStat = toSegmentStat(current, currentResult);
-
-  const legendKey = axis === "categories" ? "category" : "creator_tier";
-  const alternatives = file.legend[legendKey].filter((v) => v !== current);
-
-  let best: SegmentStat | null = null;
-  let worst: SegmentStat | null = null;
-
-  for (const alt of alternatives) {
-    const altFilters: Filters = { ...filters, [axis]: [alt] };
-    const altResult = aggregate(file, altFilters);
-    if (altResult.n === 0 || altResult.weightedEngagementRate === null) continue;
-    const stat = toSegmentStat(alt, altResult);
-    if (dataTier(stat.posts) === "insufficient") continue;
-    if (!best || (stat.weightedEngagementRatePct ?? -Infinity) > (best.weightedEngagementRatePct ?? -Infinity)) {
-      best = stat;
-    }
-    if (!worst || (stat.weightedEngagementRatePct ?? Infinity) < (worst.weightedEngagementRatePct ?? Infinity)) {
-      worst = stat;
-    }
-  }
-
-  return { axisLabel: AXIS_LABEL[axis], current: currentStat, best, worst };
-}
-
 /** Build the compact, numbers-only context payload sent to the LLM route. */
 export function buildLlmRecommendationsPayload(
   file: AggregatesFile,
@@ -113,13 +92,18 @@ export function buildLlmRecommendationsPayload(
 ): LlmRecommendationsPayload {
   const result = aggregate(file, filters);
   const byPlatform = aggregateByPlatform(file, filters);
+  const byCategory = aggregateByAxis(file, filters, "categories");
+  const byTier = aggregateByAxis(file, filters, "tiers");
   const sponsoredCompare = aggregateSponsoredCompareControlled(file, filters);
   const fallback: Recommendation[] = buildRecommendations(file, filters);
 
   return {
     segment: describeSegment(filters),
     posts: result.n,
+    filters,
     platformBreakdown: byPlatform.map((row) => toSegmentStat(row.platform, row)),
+    categoryBreakdown: byCategory.map((row) => toSegmentStat(row.value, row)),
+    tierBreakdown: byTier.map((row) => toSegmentStat(row.value, row)),
     sponsoredComparison: {
       medianGroupLiftPct:
         sponsoredCompare.medianGroupLift !== null ? (sponsoredCompare.medianGroupLift - 1) * 100 : null,
@@ -129,8 +113,6 @@ export function buildLlmRecommendationsPayload(
       sponsoredPosts: sponsoredCompare.sponsored.n,
       groupsCompared: sponsoredCompare.groupCount,
     },
-    categoryComparison: buildAxisComparison(file, filters, "categories"),
-    tierComparison: buildAxisComparison(file, filters, "tiers"),
     fallbackRecommendations: fallback.map((r) => ({
       title: r.title,
       body: r.body,

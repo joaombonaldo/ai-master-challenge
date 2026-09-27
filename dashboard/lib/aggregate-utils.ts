@@ -100,6 +100,27 @@ export function aggregateByPlatform(
   });
 }
 
+/**
+ * Generic version of aggregateByPlatform for the "categories" / "tiers"
+ * filter axes: ALWAYS returns every value on that axis (ranked by the
+ * caller), never gated on "exactly one value selected" -- unlike the old
+ * buildAxisComparison in lib/llm-recommendations.ts. Other active filters
+ * (platform, sponsored, month, and the OTHER axis) still apply, so this
+ * is "every category/tier, within whatever else is currently filtered".
+ */
+export function aggregateByAxis(
+  file: AggregatesFile,
+  filters: Filters,
+  axis: "categories" | "tiers"
+): Array<{ value: string } & AggregatedResult> {
+  const legendKey = axis === "categories" ? "category" : "creator_tier";
+  const values = file.legend[legendKey];
+  return values.map((value) => {
+    const scoped: Filters = { ...filters, [axis]: [value] };
+    return { value, ...aggregate(file, scoped) };
+  });
+}
+
 // ---------------------------------------------------------------------
 // Phase 3b: lift indicator + fair (controlled) sponsored comparison.
 // Both are pure arithmetic on aggregate cells -- no model, no LLM. This

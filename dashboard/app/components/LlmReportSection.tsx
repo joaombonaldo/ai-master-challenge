@@ -70,8 +70,16 @@ const CONFIDENCE_COLOR: Record<string, string> = {
   baixa: "text.disabled",
 };
 
+const TIPO_LABEL: Record<string, string> = {
+  oportunidade: "Oportunidade",
+  parar: "Parar",
+  testar: "Testar",
+};
+
 function toFallbackRecommendations(payload: LlmRecommendationsPayload): LlmRecommendation[] {
-  return payload.fallbackRecommendations.map((r) => ({
+  return payload.fallbackRecommendations.map((r, i) => ({
+    prioridade: i + 1,
+    tipo: r.tone === "negative" ? "parar" : r.tone === "insufficient" ? "testar" : r.tone === "positive" ? "oportunidade" : "testar",
     titulo: r.title,
     observacao: r.body,
     acao: r.action,
@@ -218,7 +226,7 @@ export default function LlmReportSection({
                   bgcolor: rec.confianca === "alta" ? "custom.goldSoft" : "transparent",
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: "9px", flexWrap: "wrap" }}>
                   <Box
                     sx={{
                       width: 7,
@@ -233,6 +241,22 @@ export default function LlmReportSection({
                     sx={{ fontFamily: "var(--font-serif)", fontSize: "0.98rem", fontWeight: 600, m: 0, color: "text.primary" }}
                   >
                     {rec.titulo}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      fontSize: "0.68rem",
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      color: "text.secondary",
+                      border: 1,
+                      borderColor: "divider",
+                      borderRadius: "999px",
+                      px: "8px",
+                      py: "1px",
+                    }}
+                  >
+                    {i + 1}. {TIPO_LABEL[rec.tipo] ?? rec.tipo}
                   </Typography>
                 </Box>
                 <Typography sx={{ fontSize: "0.85rem", color: "text.secondary", lineHeight: 1.5, mt: "8px" }}>
